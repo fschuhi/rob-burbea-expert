@@ -120,7 +120,6 @@ _Principle:_ every component should be independently testable and explainable.
 | Semantic-first splitter + LangChain check | ✅     |
 | Fake + real embedding factory (list-safe) | ✅     |
 | ChromaDB indexing (tests: 21/21 passing)  | ✅     |
-| Excel metadata extraction tool            | ⬜     |
 | Full embedding generation pipeline        | ⬜     |
 | RAG retrieval orchestration               | ⬜     |
 | Ollama UI integration                     | ⬜     |
@@ -143,7 +142,6 @@ Typical runtime: ~3 s on dev machine (manual splitter path).
 
 - Hermes Amara Foundation: https://hermesamara.org
 - Talk transcriptions: 548 high-quality Markdown files
-- Metadata: Excel spreadsheet with retreat info, dates, series
 
 ---
 
