@@ -23,22 +23,22 @@ class MockEmbeddingFunction(EmbeddingFunction):
 
 
 @pytest.fixture
-def test_env(tmp_path: Path) -> Env:
-    """Creates an Env configured with a temporary directory for the DB."""
+def test_env() -> Env:
+    """Creates an Env configured with tmp/chroma_db for easy inspection."""
 
-    # Create the required directories and files first
-    talks_dir = tmp_path / "talks"
-    talks_dir.mkdir(parents=True, exist_ok=True)
+    # Use project root's tmp directory for ChromaDB
+    project_root = Path(__file__).parent.parent
+    chroma_dir = project_root / "tmp" / "chroma_db"
 
-    metadata_file = tmp_path / "metadata.json"
-    metadata_file.touch()
+    # Point to existing fixture data
+    fixtures_dir = project_root / "tests" / "fixtures" / "data"
 
     return Env(
         paths=Paths(
-            data_dir=tmp_path / "data",
-            raw_talks_dir=talks_dir,
-            chroma_db_dir=tmp_path / "chroma_db",
-            metadata_path=metadata_file
+            data_dir=fixtures_dir,
+            raw_talks_dir=fixtures_dir / "raw_talks",
+            chroma_db_dir=chroma_dir,
+            metadata_path=fixtures_dir / "metadata.json"
         ),
         rag=RAG(),
         io=IO(create_missing_dirs=True)
