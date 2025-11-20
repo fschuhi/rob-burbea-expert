@@ -19,6 +19,8 @@ pytest-cov>=4.1.0
 black>=23.0.0
 flake8>=6.0.0
 
+# Web UI frontend
+streamlit>=1.30.0
+
 # --- Optional / Future ---
 # langchain-text-splitters  # Removed: We use our custom manual splitter in data_prep.py
-# streamlit>=1.30.0         # Future: Web UI frontend
