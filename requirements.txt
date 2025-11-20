@@ -2,7 +2,10 @@
 chromadb>=0.4.22
 sentence-transformers>=2.2.2
 ollama>=0.1.6
-langchain-text-splitters # NEW ENTRY
+# numpy is required for matrix operations and used in tests
+numpy>=1.24.0
+# pydantic is used for configuration management
+pydantic>=2.0.0
 
 # Data processing
 pandas>=2.0.0
@@ -12,9 +15,10 @@ openpyxl>=3.1.0  # For Excel file reading
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
-# Optional: Web UI (future)
-# streamlit>=1.30.0
-
 # Development
 black>=23.0.0
 flake8>=6.0.0
+
+# --- Optional / Future ---
+# langchain-text-splitters  # Removed: We use our custom manual splitter in data_prep.py
+# streamlit>=1.30.0         # Future: Web UI frontend

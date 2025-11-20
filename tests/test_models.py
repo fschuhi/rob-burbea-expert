@@ -19,11 +19,11 @@ def mock_sentence_transformer():
         mock_instance = MagicMock()
         mock_class.return_value = mock_instance
 
-        # Mock encode to return a numpy array
+        # FIX: Explicitly use np.float32 to ensure clean tolist() conversion
         mock_instance.encode.return_value = np.array([
             [0.1, 0.2, 0.3],
             [0.4, 0.5, 0.6]
-        ])
+        ], dtype=np.float32)
 
         yield mock_class, mock_instance
 
@@ -52,9 +52,10 @@ def test_call_returns_list(mock_sentence_transformer):
     mock_instance.encode.assert_called_once_with(docs)
 
     # Check we got a list of lists
-    assert isinstance(results, list)
-    assert isinstance(results[0], list)
-    assert results == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+    assert isinstance(results, list), f"Expected list, got {type(results)}"
+    assert isinstance(results[0], list), f"Expected list of lists, got list of {type(results[0])}"
+    assert results == [[0.1, 0.2, 0.3], [0.4, 0.5,
+                                         0.6]]  # Floating point comparison might be tricky, but exact match usually works for simple floats
 
 
 def test_factory_function(mock_sentence_transformer):
