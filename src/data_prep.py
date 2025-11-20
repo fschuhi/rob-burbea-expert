@@ -10,7 +10,7 @@ from src.env import Env, RAG
 class Document:
     """Represents a single chunk of text with associated metadata."""
 
-    def __init__(self, page_content: str, metadata: dict[str, str | Path]):
+    def __init__(self, page_content: str, metadata: dict[str, str | Path | int]):
         self.page_content = page_content
         self.metadata = metadata
 
@@ -138,10 +138,11 @@ def _split_with_manual_splitter(
         source_path: Path
 ) -> Sequence[Document]:
     """
-    Manual semantic-first splitter implementation.
+    Manual semantic-first splitter implementation with paragraph tracking.
 
     Phase 1: Split on paragraphs
     Phase 2: For oversized paragraphs, split with overlap
+    Phase 3: Add paragraph metadata to all chunks
 
     This is faster than langchain because it has no ML dependencies.
     """
@@ -152,8 +153,9 @@ def _split_with_manual_splitter(
     # Phase 1: Split on paragraphs
     paragraphs = clean_content.split('\n\n')
 
-    # Phase 2: Process each paragraph
+    # Phase 2: Process each paragraph with metadata tracking
     chunks: list[Document] = []
+    paragraph_index = 0
 
     for paragraph in paragraphs:
         para_stripped = paragraph.strip()
@@ -161,26 +163,39 @@ def _split_with_manual_splitter(
         if not para_stripped:
             continue
 
+        # Skip the "## Transcription" header that appears in every talk
+        if para_stripped == "## Transcription":
+            continue
+
+        # Split paragraph into chunks (may be 1 or more)
         if len(para_stripped) <= rag_config.chunk_size:
             # Paragraph fits, keep as-is
-            chunks.append(Document(
-                page_content=para_stripped,
-                metadata={"source": str(source_path)}
-            ))
+            para_chunks = [para_stripped]
         else:
             # Paragraph too large, split it with overlap
-            sub_chunks = _split_text_with_overlap(
+            para_chunks = _split_text_with_overlap(
                 para_stripped,
                 rag_config.chunk_size,
                 rag_config.chunk_overlap,
                 ["\n", " ", ""]  # Try line breaks, then words, then characters
             )
-            for sub_chunk in sub_chunks:
-                if sub_chunk.strip():
-                    chunks.append(Document(
-                        page_content=sub_chunk.strip(),
-                        metadata={"source": str(source_path)}
-                    ))
+
+        # Create Document objects with paragraph metadata
+        total_chunks = len(para_chunks)
+        for chunk_position, chunk_text in enumerate(para_chunks):
+            if chunk_text.strip():
+                chunks.append(Document(
+                    page_content=chunk_text.strip(),
+                    metadata={
+                        "source": str(source_path),
+                        "paragraph_index": paragraph_index,
+                        "chunk_position": chunk_position,
+                        "total_chunks_in_para": total_chunks
+                    }
+                ))
+
+        # Increment paragraph index only for non-skipped paragraphs
+        paragraph_index += 1
 
     return chunks
 
@@ -191,7 +206,7 @@ def _split_with_langchain(
         source_path: Path
 ) -> Sequence[Document]:
     """
-    Langchain-based splitter (slower due to ML library imports).
+    Langchain-based splitter (slower due to ML library imports) with paragraph tracking.
 
     This is kept as a fallback option to validate the manual splitter.
     """
@@ -214,8 +229,9 @@ def _split_with_langchain(
         is_separator_regex=False
     )
 
-    # Phase 3: Process each paragraph
+    # Phase 3: Process each paragraph with metadata tracking
     chunks: list[Document] = []
+    paragraph_index = 0
 
     for paragraph in paragraphs:
         para_stripped = paragraph.strip()
@@ -223,19 +239,32 @@ def _split_with_langchain(
         if not para_stripped:
             continue
 
+        # Skip the "## Transcription" header that appears in every talk
+        if para_stripped == "## Transcription":
+            continue
+
+        # Split paragraph into chunks (may be 1 or more)
         if len(para_stripped) <= rag_config.chunk_size:
-            chunks.append(Document(
-                page_content=para_stripped,
-                metadata={"source": str(source_path)}
-            ))
+            para_chunks = [para_stripped]
         else:
-            sub_chunks = text_splitter.split_text(para_stripped)
-            for sub_chunk in sub_chunks:
-                if sub_chunk.strip():
-                    chunks.append(Document(
-                        page_content=sub_chunk.strip(),
-                        metadata={"source": str(source_path)}
-                    ))
+            para_chunks = text_splitter.split_text(para_stripped)
+
+        # Create Document objects with paragraph metadata
+        total_chunks = len(para_chunks)
+        for chunk_position, chunk_text in enumerate(para_chunks):
+            if chunk_text.strip():
+                chunks.append(Document(
+                    page_content=chunk_text.strip(),
+                    metadata={
+                        "source": str(source_path),
+                        "paragraph_index": paragraph_index,
+                        "chunk_position": chunk_position,
+                        "total_chunks_in_para": total_chunks
+                    }
+                ))
+
+        # Increment paragraph index only for non-skipped paragraphs
+        paragraph_index += 1
 
     return chunks
 
@@ -246,15 +275,17 @@ def split_documents(
         source_path: Path
 ) -> Sequence[Document]:
     """
-    Splits a document using a semantic-first, two-phase approach.
+    Splits a document using a semantic-first, two-phase approach with paragraph tracking.
 
     Strategy:
     1. Normalize line endings (Windows CRLF → Unix LF)
     2. Normalize excessive blank lines (3+ newlines → 2)
     3. Split on paragraph boundaries (\\n\\n)
-    4. For each paragraph:
+    4. Skip "## Transcription" headers
+    5. For each paragraph:
        - If ≤ chunk_size: keep as single chunk
        - If > chunk_size: split with overlap (respecting line/word boundaries)
+    6. Add paragraph metadata to each chunk
 
     The implementation can use either:
     - Manual splitter (fast, no ML dependencies) - DEFAULT
@@ -268,7 +299,11 @@ def split_documents(
         source_path: Source file path for metadata
 
     Returns:
-        Sequence of Document objects with page_content and metadata
+        Sequence of Document objects with page_content and metadata including:
+        - source: file path
+        - paragraph_index: which paragraph in the document (0-indexed)
+        - chunk_position: position within paragraph if split (0-indexed)
+        - total_chunks_in_para: how many chunks this paragraph was split into
     """
     text_content = text_content.strip()
 

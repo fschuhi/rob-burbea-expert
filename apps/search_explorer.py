@@ -1,8 +1,10 @@
 """
-Streamlit app for exploring semantic search results in Rob Burbea talks.
+Search Explorer - Semantic search interface for Rob Burbea talks.
 
 Usage:
-    streamlit run app.py
+    streamlit run apps/search_explorer.py
+    OR
+    make app
 """
 
 import streamlit as st
@@ -22,7 +24,7 @@ def get_collection():
     Uses Streamlit cache so this only runs once per session.
     """
     # Use the same setup as test_retrieval.py
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).parent.parent
     chroma_dir = project_root / "tmp" / "chroma_db_retrieval"
     fixtures_dir = project_root / "tests" / "fixtures" / "data"
 

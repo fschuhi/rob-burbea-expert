@@ -2,3 +2,4 @@
 
 - Fix "Type of '__init__' is incompatible with 'EmbeddingFunction'" warnings in src/models.py (PyCharm strict type checking issue)
 - Consider sentence-based chunking instead of paragraph-overlap approach for better semantic coherence (deferred - requires more complex implementation)
+- Implement HTML background color highlighting for matched chunks in Search Explorer (currently using simple line separators)

@@ -90,6 +90,32 @@ Reference template: `tests/fixtures/test_env.toml`.
 
 ---
 
+## Makefile Targets
+
+```bash
+# Setup and dependencies
+make setup          # Install dependencies and project
+
+# Testing
+make test           # Run all tests (quiet mode)
+make test-verbose   # Run tests with full output
+make test-fast      # Skip slow indexing tests
+
+# Application
+make app            # Launch Search Explorer Streamlit app
+
+# Indexing
+make index          # Manually index 32 talks to tmp/chroma_db_retrieval
+
+# Utilities
+make clean          # Remove venv, caches, and tmp databases
+make showtree       # Display project structure
+make gentree        # Save project tree to project-tree.txt
+make filesdump      # Concatenate files for LLM context
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -97,9 +123,11 @@ rob-burbea-expert/
 ├── src/
 │   ├── env.py          # Config loading (TOML) with Pydantic validation
 │   ├── models.py       # Embedding factory (real + fake for testing)
-│   ├── data_prep.py    # Text ingestion + chunking
+│   ├── data_prep.py    # Text ingestion + chunking with paragraph tracking
 │   ├── database.py     # ChromaDB connector wrapper
 │   └── indexing.py     # Full indexing pipeline
+├── apps/
+│   └── search_explorer.py  # Streamlit semantic search interface
 ├── tests/
 │   ├── test_env.py         # Configuration tests
 │   ├── test_models.py      # Embedding function tests
@@ -116,6 +144,7 @@ rob-burbea-expert/
 │   ├── chroma_db_indexing/
 │   └── chroma_db_retrieval/
 ├── tools/                  # Utility scripts
+│   └── concat_files.py     # File concatenation for LLM context
 └── data/                   # Runtime artifacts (gitignored)
 ```
 
@@ -138,17 +167,21 @@ _Principle:_ every component should be independently testable and explainable.
 |-------------------------------------------|--------|
 | Project scaffolding & config              | ✅     |
 | Semantic-first splitter + LangChain check | ✅     |
+| Paragraph metadata tracking               | ✅     |
 | Fake + real embedding factory (list-safe) | ✅     |
 | ChromaDB indexing with deterministic IDs  | ✅     |
 | Full embedding generation pipeline        | ✅     |
 | RAG retrieval validation & testing        | ✅     |
 | Query performance benchmarking            | ✅     |
+| Search Explorer Streamlit app             | ✅     |
+| Paragraph reconstruction for context      | 🚧     |
 | Ollama LLM integration                    | ⬜     |
 | Context building for LLM prompts          | ⬜     |
 | CLI interface                             | ⬜     |
-| Streamlit UI                              | ⬜     |
 
 **All 32 tests passing** ✅
+
+**Legend:** ✅ Complete | 🚧 In Progress | ⬜ Planned
 
 ---
 
@@ -180,7 +213,30 @@ pytest -v --durations=10
 - **Indexing**: Full pipeline with ~4,900 chunks from 32 talks
 - **Retrieval**: Semantic search, relevance validation, performance benchmarking
 
-Typical runtime: ~25 seconds on dev machine (includes model download on first run).
+Typical runtime: ~30 seconds on dev machine (includes model download on first run).
+
+---
+
+## Search Explorer App
+
+Interactive Streamlit interface for exploring semantic search results:
+
+```bash
+# Run the app (recommended)
+make app
+
+# Or run directly with PYTHONPATH set
+PYTHONPATH=. streamlit run apps/search_explorer.py
+```
+
+**Features:**
+- Semantic search across 32 indexed talks (~4,800 chunks)
+- Adjustable result count (1-50 chunks)
+- Similarity scores and distance metrics
+- Source file information for each result
+- Real-time query performance
+
+The app automatically indexes talks on first run if the database doesn't exist.
 
 ---
 
@@ -221,6 +277,30 @@ This enables:
 - Query results are ordered by similarity
 - Metadata (source file) is preserved
 - Performance benchmarks (~10-50ms per query)
+
+### Paragraph Metadata Tracking
+
+Each chunk includes metadata for paragraph reconstruction:
+
+```python
+{
+    "source": "path/to/talk.md",
+    "paragraph_index": 12,        # Which paragraph in the document
+    "chunk_position": 1,          # Position within paragraph (if split)
+    "total_chunks_in_para": 3     # How many chunks this paragraph became
+}
+```
+
+**Features:**
+- Enables full paragraph reconstruction from retrieved chunks
+- Supports context window expansion for LLM prompts
+- Skips boilerplate headers ("## Transcription")
+- Maintains semantic boundaries across splits
+
+This allows the app to:
+1. Retrieve a matching chunk
+2. Reconstruct its full paragraph for complete context
+3. Highlight the matched portion within the paragraph
 
 ### Test Database Isolation
 

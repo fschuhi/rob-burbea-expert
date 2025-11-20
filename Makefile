@@ -9,20 +9,17 @@ RUN_WITH_PATH = $(ACTIVATE) && PYTHONPATH=src
 SETUP_STAMP = $(VENV_DIR)/.setup_stamp
 
 # --- Phony targets (commands that don't produce files) ---
-.PHONY: all setup test run extract streamline clean showtree gentree filesdump discover-pdfs hash
+.PHONY: all setup test test-verbose test-fast index app clean showtree gentree filesdump
 
 # Default target runs 'setup'
 all: setup
 
-# --- FIX: Target is now the 'activate' file itself ---
+# --- Virtual Environment Setup ---
 # This recipe will only run if the 'activate' file does not exist.
 $(VENV_ACTIVATE):
 	python3 -m venv $(VENV_DIR)
 
-# --- FIX: Smart 'setup' target ---
-# This target now depends on the venv *existing* (via the activate file)
-# and our config files. It will only run if the stamp file is missing,
-# or if requirements.txt or pyproject.toml have been modified.
+# Smart 'setup' target - only runs if dependencies changed
 $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Installing dependencies ---"
 	$(PIP) install -r requirements.txt
@@ -34,42 +31,56 @@ $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 # 'setup' is a friendly alias for the stamp file
 setup: $(SETUP_STAMP)
 
-# --- Lightweight 'run' target ---
-# Depends on setup being complete.
-# Runs the main sync module directly via python -m.
-# Pass arguments like: make run ARGS="-c myconfig.toml"
-run: $(SETUP_STAMP)
-	$(RUN_WITH_PATH) python -m pdf_annot.sync $(ARGS)
+# --- Testing Targets ---
 
-# --- NEW: 'hash' target ---
-# Runs the print_hashes.py tool
-# Pass arguments like: make hash ARGS="(Albini 2013) Title.pdf"
-hash: $(SETUP_STAMP)
-	$(RUN_WITH_PATH) python tools/print_hashes.py $(ARGS)
-
-# Run tests
+# Run all tests (quiet mode)
 test: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q
 
-# Extract annotations
-extract: $(SETUP_STAMP)
-	$(RUN_WITH_PATH) python -m pdf_annot.extract -p tests/fixtures/pdf_to_markdown_e2e/input.pdf
+# Run tests with verbose output and print statements
+test-verbose: $(SETUP_STAMP)
+	$(RUN_WITH_PATH) pytest -v -s
 
-# Streamline annotations
-streamline: $(SETUP_STAMP)
-	$(RUN_WITH_PATH) python -m pdf_annot.streamline_annotations -i tests/fixtures/pdf_to_markdown_e2e/expected_raw.ndjson -o /tmp/final_streamlined.ndjson
+# Run fast tests only (skip retrieval tests that do full indexing)
+test-fast: $(SETUP_STAMP)
+	$(RUN_WITH_PATH) pytest -q --ignore=tests/test_retrieval.py
 
-# Discover PDFs
-discover-pdfs: $(SETUP_STAMP)
-	$(RUN_WITH_PATH) python tools/discover_pdfs.py --env tests/fixtures/env/test_pdf_annot.toml --relative-to .
+# --- Indexing Targets ---
 
-# Concatenate files
+# Index the 32 test talks into the retrieval database
+# This is useful for manually refreshing the database used by the app
+index: $(SETUP_STAMP)
+	@echo "--- Indexing 32 talks to tmp/chroma_db_retrieval ---"
+	@rm -rf tmp/chroma_db_retrieval
+	$(RUN_WITH_PATH) python -c "from pathlib import Path; \
+		from src.env import Env, Paths, RAG, IO, Models; \
+		from src.indexing import run_indexer; \
+		env = Env( \
+			paths=Paths( \
+				data_dir=Path('tests/fixtures/data'), \
+				raw_talks_dir=Path('tests/fixtures/data/raw_talks'), \
+				chroma_db_dir=Path('tmp/chroma_db_retrieval'), \
+				metadata_path=Path('tests/fixtures/data/metadata.json') \
+			), \
+			rag=RAG(chunk_size=500, chunk_overlap=0), \
+			io=IO(create_missing_dirs=True), \
+			models=Models(embedding_model='all-MiniLM-L6-v2') \
+		); \
+		run_indexer(env)"
+
+# --- Application Targets ---
+
+# Run the search explorer Streamlit app
+app: $(SETUP_STAMP)
+	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py
+
+# --- Utility Targets ---
+
+# Concatenate files for LLM context
 filesdump: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) python tools/concat_files.py files.lst > tmp/filesdump.txt
 
-# --- Utility targets ---
-
-# Clean build/test artifacts and venv
+# Clean build/test artifacts, venv, and databases
 clean:
 	rm -rf $(VENV_DIR) .pytest_cache tmp
 	find . -name "__pycache__" -type d -prune -exec rm -rf {} +
@@ -82,5 +93,3 @@ showtree:
 # Save a tree snapshot
 gentree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt
-
-
