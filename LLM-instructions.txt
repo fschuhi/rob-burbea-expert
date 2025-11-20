@@ -4,6 +4,26 @@ Furthermore, as a general rule, let's do everything step by step. I'm easily ove
 
 Please stick to what I tell you. Don't try to read my mind, or infer anything I'd like to do without making sure that is actually the case. Ask first before you generate stuff I haven't asked first. This holds for _all_ conversations we have, not just this one.
 
+## Workflow Pattern
+
+The correct workflow is:
+1. **Discuss the problem/approach** - Explain the issue, propose solutions, discuss trade-offs
+2. **Get explicit sign-off** - Wait for me to say "yes, do that" or "create X"
+3. **Implement** - Only after approval, create the files/code
+4. **Don't create unsolicited files** - No "bonus" documentation, helpers, or guides unless I ask
+
+Examples of what NOT to do:
+- Creating files before I've approved the approach
+- Adding "bonus" files like setup guides or helpers without asking
+- Assuming I want something even if it seems helpful
+
+Examples of correct workflow:
+- "Here's the issue... Here are 3 approaches... Which do you prefer?"
+- "Should I implement this as X or Y?"
+- Waiting for my explicit "yes, create that" before generating files
+
+## Tools and Environment
+
 We are using the following tools:
 * We are coding in Python whenever possible.
 * Main IDE is PyCharm Pro.
