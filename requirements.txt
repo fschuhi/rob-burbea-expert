@@ -1,0 +1,20 @@
+# Core RAG dependencies
+chromadb>=0.4.22
+sentence-transformers>=2.2.2
+ollama>=0.1.6
+langchain-text-splitters # NEW ENTRY
+
+# Data processing
+pandas>=2.0.0
+openpyxl>=3.1.0  # For Excel file reading
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Optional: Web UI (future)
+# streamlit>=1.30.0
+
+# Development
+black>=23.0.0
+flake8>=6.0.0

@@ -1,0 +1,49 @@
+# Rob Burbea Expert - Example Configuration
+# Copy this file to rb_expert.toml and customize for your setup
+
+[paths]
+# Root directory for all project data
+data_dir = "data"
+# Directory containing markdown talk transcripts
+raw_talks_dir = "data/raw_talks"
+# Vector database storage
+chroma_db_dir = "data/chroma_db"
+# Metadata JSON file
+metadata_path = "data/raw_talks/metadata.json"
+
+[models]
+# Sentence transformer model for embeddings
+# Options: "all-MiniLM-L6-v2" (fast, good), "all-mpnet-base-v2" (slower, better)
+embedding_model = "all-MiniLM-L6-v2"
+# Default Ollama model for queries
+default_llm_model = "dolphin-mistral:7b"
+# Available models (for UI selection)
+available_llm_models = [
+    "dolphin-mistral:7b",
+    "gemma3n-abliterated:e2b-fp16",
+]
+
+[rag]
+# Text chunk size in characters (affects retrieval granularity)
+chunk_size = 500
+# Overlap between chunks (helps maintain context across boundaries)
+chunk_overlap = 50
+# Number of chunks to retrieve for each query
+top_k_results = 5
+# Minimum similarity score for retrieval (0.0 to 1.0)
+similarity_threshold = 0.75
+# Use langchain splitter (true) or fast manual splitter (false)
+# Set to true if you encounter issues with the manual splitter
+use_langchain_splitter = false
+
+[ollama]
+# Local Ollama server URL
+base_url = "http://localhost:11434"
+# Request timeout in seconds
+timeout = 60
+
+[io]
+# Create missing directories automatically
+create_missing_dirs = true
+# Use atomic file writes (safer but slower)
+atomic_writes = true

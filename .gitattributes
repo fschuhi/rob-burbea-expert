@@ -1,0 +1,13 @@
+# Default for all files
+text=auto
+
+# Force LF (Unix) line endings for common text files
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# --- NEW: Force CRLF (Windows) line endings for server files ---
+windows_server/*.bat text eol=crlf
+windows_server/*.ini text eol=crlf

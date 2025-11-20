@@ -1,0 +1,38 @@
+# Test environment configuration for Rob Burbea Expert
+# This config points to test fixtures and is used by pytest
+
+[paths]
+# Test data directories (relative to project root)
+data_dir = "tests/fixtures/data"
+chroma_db_dir = "tests/fixtures/data/chroma_db"
+raw_talks_dir = "tests/fixtures/talks"
+metadata_path = "tests/fixtures/metadata.json"
+
+[models]
+# Use lightweight embedding model for faster tests
+embedding_model = "all-MiniLM-L6-v2"
+# Default LLM for test queries
+default_llm_model = "dolphin-mistral:7b"
+# Available models for testing
+available_llm_models = [
+    "dolphin-mistral:7b",
+    "huihui_ai/gemma3n-abliterated:e2b-fp16",
+]
+
+[rag]
+# Smaller chunks for test data
+chunk_size = 500
+chunk_overlap = 50
+# Retrieve fewer results in tests
+top_k_results = 3
+similarity_threshold = 0.7
+# Use fast manual splitter by default (set to true to test langchain fallback)
+use_langchain_splitter = false
+
+[ollama]
+base_url = "http://localhost:11434"
+timeout = 60
+
+[io]
+# Test behavior
+create_missing_dirs = true
