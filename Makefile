@@ -83,3 +83,4 @@ showtree:
 gentree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt
 
+
