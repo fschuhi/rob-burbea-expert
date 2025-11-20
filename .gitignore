@@ -64,7 +64,8 @@ files*.lst
 project-tree.txt
 
 # Configuration files
-# Ignore all TOML configs in root (production configs with secrets/paths)
-# but keep the example config for documentation
-/*.toml
+# Ignore production config (may contain secrets/local paths)
+# Keep pyproject.toml (essential package metadata) and example configs
+rb_expert.toml
 !rb_expert.example.toml
+# Note: pyproject.toml is NOT ignored - it's essential for the project
