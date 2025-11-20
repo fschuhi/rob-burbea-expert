@@ -1,5 +1,2 @@
 (This list is an unordered list of smaller TODOs which has come up while developing the solution.)
 
-* Review the Makefile and delete targets which do not belong to rob-burbea-expert.
-* Update .gitignore to only include the example production toml in the root but ignore other tomls there (including but not limited to our true production toml).
-* Setup project in GitHub.
