@@ -24,11 +24,11 @@ class MockEmbeddingFunction(EmbeddingFunction):
 
 @pytest.fixture
 def test_env() -> Env:
-    """Creates an Env configured with tmp/chroma_db for easy inspection."""
+    """Creates an Env configured with tmp/chroma_db_database for easy inspection."""
 
-    # Use project root's tmp directory for ChromaDB
+    # Use project root's tmp directory for ChromaDB (separate subdirectory for database tests)
     project_root = Path(__file__).parent.parent
-    chroma_dir = project_root / "tmp" / "chroma_db"
+    chroma_dir = project_root / "tmp" / "chroma_db_database"
 
     # Point to existing fixture data
     fixtures_dir = project_root / "tests" / "fixtures" / "data"

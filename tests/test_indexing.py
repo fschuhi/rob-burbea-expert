@@ -11,11 +11,11 @@ from src.models import FakeEmbeddingFunction
 
 @pytest.fixture
 def index_test_env() -> Env:
-    """Creates an Env configured with tmp/chroma_db and real fixture data."""
+    """Creates an Env configured with tmp/chroma_db_indexing and real fixture data."""
 
-    # Use project root's tmp directory for ChromaDB
+    # Use project root's tmp directory for ChromaDB (separate subdirectory for indexing tests)
     project_root = Path(__file__).parent.parent
-    chroma_dir = project_root / "tmp" / "chroma_db"
+    chroma_dir = project_root / "tmp" / "chroma_db_indexing"
 
     # Point to existing fixture data
     fixtures_dir = project_root / "tests" / "fixtures" / "data"
