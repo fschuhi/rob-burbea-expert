@@ -109,6 +109,11 @@ def main():
             margin: 0.5rem 0 !important;
         }
 
+        /* Fix text input label clipping */
+        label {
+            padding-top: 1.0rem !important;
+        }
+
         /* Light green highlighting for matched chunks */
         hit {
             color: #7CFC00;
@@ -154,12 +159,13 @@ def main():
         show_chunk_ids = st.checkbox("Show IDs", value=False)
         show_chunk_debug = st.checkbox("Show chunk debug info", value=False)
 
-    # Query input
+    # Query input - use key="query" so session state variable name matches
     st.markdown("---")
     query = st.text_input(
         "🔍 Search:",
         placeholder="e.g., 'energy body practice' or 'what is the first jhana?'",
-        help="Semantic search across all talks"
+        help="Semantic search across all talks",
+        key="query"  # This makes the value accessible as st.session_state.query
     )
 
     if query:
@@ -187,11 +193,16 @@ def main():
             st.markdown("---")
 
             for idx, result in enumerate(filtered_results, start=1):
-                # Compact header with distance on the same line
-                source_file = result['metadata'].get('source', 'Unknown')
-                distance_str = f"d={result['distance']:.4f}"
+                # Header with two columns: title on left, distance on right
+                col1, col2 = st.columns([4, 1])
 
-                st.markdown(f"**#{idx} · {format_source(source_file)}** · *{distance_str}*")
+                with col1:
+                    source_file = result['metadata'].get('source', 'Unknown')
+                    st.markdown(f"**#{idx} · {format_source(source_file)}**")
+
+                with col2:
+                    # Show distance as a bold metric (like the old "Sim" display)
+                    st.metric("", f"{result['distance']:.4f}", label_visibility="collapsed")
 
                 # Show chunk ID if enabled
                 if show_chunk_ids:
@@ -271,7 +282,9 @@ def main():
         cols = st.columns(3)
         for idx, example in enumerate(examples):
             with cols[idx % 3]:
-                if st.button(f"🔍 {example}", key=example, use_container_width=True):
+                if st.button(f"🔍 {example}", key=f"btn_{example}", use_container_width=True):
+                    # Set the query in session state and rerun to trigger search
+                    st.session_state.query = example
                     st.rerun()
 
 
