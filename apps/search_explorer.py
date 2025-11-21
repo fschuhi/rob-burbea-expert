@@ -79,6 +79,8 @@ def main():
         h1 {
             font-size: 1.5rem !important;
             margin-bottom: 0.25rem !important;
+            padding-top: 2.0rem !important;
+            line-height: 1.5 !important;
         }
         h3 {
             font-size: 1.1rem !important;
@@ -107,11 +109,6 @@ def main():
         }
         hr {
             margin: 0.5rem 0 !important;
-        }
-
-        /* Fix text input label clipping */
-        label {
-            padding-top: 1.0rem !important;
         }
 
         /* Light green highlighting for matched chunks */
@@ -159,14 +156,22 @@ def main():
         show_chunk_ids = st.checkbox("Show IDs", value=False)
         show_chunk_debug = st.checkbox("Show chunk debug info", value=False)
 
-    # Query input - use key="query" so session state variable name matches
+    # Initialize query in session state if not exists
+    if 'search_query' not in st.session_state:
+        st.session_state.search_query = ""
+
+    # Query input - use value from session state but don't set key
     st.markdown("---")
     query = st.text_input(
         "🔍 Search:",
+        value=st.session_state.search_query,
         placeholder="e.g., 'energy body practice' or 'what is the first jhana?'",
-        help="Semantic search across all talks",
-        key="query"  # This makes the value accessible as st.session_state.query
+        help="Semantic search across all talks"
     )
+
+    # Update session state when user types
+    if query != st.session_state.search_query:
+        st.session_state.search_query = query
 
     if query:
         # Perform search - get many results, then filter by distance
@@ -284,7 +289,7 @@ def main():
             with cols[idx % 3]:
                 if st.button(f"🔍 {example}", key=f"btn_{example}", use_container_width=True):
                     # Set the query in session state and rerun to trigger search
-                    st.session_state.query = example
+                    st.session_state.search_query = example
                     st.rerun()
 
 
