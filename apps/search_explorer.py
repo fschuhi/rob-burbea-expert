@@ -13,7 +13,7 @@ import shutil
 
 from src.env import Env, Paths, RAG, IO, Models
 from src.indexing import run_indexer
-from src.database import ChromaConnector
+from src.database import ChromaConnector, reconstruct_paragraph_with_hit
 from src.models import get_embedding_function
 
 
@@ -59,6 +59,19 @@ def get_collection():
 def format_source(source_path: str) -> str:
     """Extract a readable filename from the full path."""
     return Path(source_path).stem.replace("-", " ").title()
+
+
+def convert_hit_tags_to_bold(text: str) -> str:
+    """
+    Convert <hit>...</hit> XML tags to **...** markdown bold.
+
+    Args:
+        text: Text with <hit> tags
+
+    Returns:
+        Text with markdown bold syntax
+    """
+    return text.replace("<hit>", "**").replace("</hit>", "**")
 
 
 def main():
@@ -144,8 +157,10 @@ def main():
         st.caption("• 0.8+: Likely not relevant")
 
         st.markdown("---")
+        show_full_paragraph = st.checkbox("Show full paragraph", value=True)
         show_scores = st.checkbox("Show scores", value=True)
         show_chunk_ids = st.checkbox("Show IDs", value=False)
+        show_chunk_debug = st.checkbox("Show chunk debug info", value=False)
 
     # Query input
     st.markdown("---")
@@ -180,7 +195,7 @@ def main():
             st.markdown("---")
 
             for idx, result in enumerate(filtered_results, start=1):
-                # Compact result display
+                # Compact result display with reduced spacing
                 col1, col2 = st.columns([4, 1])
 
                 with col1:
@@ -190,14 +205,62 @@ def main():
                 with col2:
                     if show_scores:
                         similarity_pct = max(0, (1 - result['distance']) * 100)
-                        st.metric("Sim", f"{similarity_pct:.0f}%")
+                        st.metric("Sim", f"{similarity_pct:.0f}%", label_visibility="visible")
 
                 # Show chunk ID if enabled
                 if show_chunk_ids:
                     st.caption(f"`{result['id']}`")
 
-                # Show the chunk text
-                st.markdown(f"> {result['document']}")
+                # Try to reconstruct full paragraph if enabled
+                display_text = result['document']
+                reconstruction_error = None
+
+                if show_full_paragraph:
+                    try:
+                        # Extract metadata for reconstruction
+                        source = result['metadata'].get('source')
+                        para_idx = result['metadata'].get('paragraph_index')
+                        chunk_pos = result['metadata'].get('chunk_position')
+
+                        if source is not None and para_idx is not None and chunk_pos is not None:
+                            # Reconstruct paragraph with hit marking
+                            reconstruction = reconstruct_paragraph_with_hit(
+                                collection,
+                                source=source,
+                                paragraph_index=para_idx,
+                                hit_chunk_position=chunk_pos
+                            )
+
+                            # Convert <hit> tags to bold markdown
+                            display_text = convert_hit_tags_to_bold(reconstruction['marked_text'])
+
+                        else:
+                            # Missing metadata - show warning
+                            reconstruction_error = "⚠️ Missing metadata for paragraph reconstruction"
+
+                    except Exception as e:
+                        # Reconstruction failed - fall back to chunk
+                        reconstruction_error = f"⚠️ Paragraph reconstruction failed: {str(e)}"
+
+                # Show the text (either chunk or reconstructed paragraph)
+                st.markdown(f"> {display_text}")
+
+                # Show reconstruction error if any
+                if reconstruction_error:
+                    st.caption(reconstruction_error)
+
+                # Show chunk debug info if enabled
+                if show_chunk_debug:
+                    debug_info = []
+                    if 'paragraph_index' in result['metadata']:
+                        debug_info.append(f"para_idx={result['metadata']['paragraph_index']}")
+                    if 'chunk_position' in result['metadata']:
+                        debug_info.append(f"chunk_pos={result['metadata']['chunk_position']}")
+                    if 'total_chunks_in_para' in result['metadata']:
+                        debug_info.append(f"total_chunks={result['metadata']['total_chunks_in_para']}")
+
+                    if debug_info:
+                        st.caption(f"🔧 Chunk: {', '.join(debug_info)}")
 
                 # Show raw distance if scores enabled
                 if show_scores:
