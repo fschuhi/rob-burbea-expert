@@ -8,18 +8,21 @@ RUN_WITH_PATH = $(ACTIVATE) && PYTHONPATH=.
 # The sentinel file to check if setup is complete
 SETUP_STAMP = $(VENV_DIR)/.setup_stamp
 
-# --- Phony targets (commands that don't produce files) ---
-.PHONY: all setup test test-verbose test-fast index app chat clean showtree gentree filesdump startollama killollama ingest-pilot
+# Ports for the applications
+APP_PORT = 8501
+CHAT_PORT = 8502
+
+# --- Phony targets ---
+.PHONY: all setup test test-verbose test-fast index app chat clean showtree gentree filesdump startollama killollama startapp killapp startchat killchat ingest-pilot
 
 # Default target runs 'setup'
 all: setup
 
 # --- Virtual Environment Setup ---
-# This recipe will only run if the 'activate' file does not exist.
 $(VENV_ACTIVATE):
 	python3 -m venv $(VENV_DIR)
 
-# Smart 'setup' target - only runs if dependencies changed
+# Smart 'setup' target
 $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Installing dependencies ---"
 	$(PIP) install -r requirements.txt
@@ -33,36 +36,88 @@ $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Setup complete ---"
 	@touch $(SETUP_STAMP)
 
-# 'setup' is a friendly alias for the stamp file
 setup: $(SETUP_STAMP)
 
 # --- Testing Targets ---
-
-# Run all tests (quiet mode)
 test: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q
 
-# Run tests with verbose output and print statements
 test-verbose: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -v -s
 
-# Run fast tests only (skip retrieval tests that do full indexing)
 test-fast: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q --ignore=tests/test_retrieval.py
 
-# --- Application Targets ---
+# --- Application Targets (Foreground) ---
 
-# Run the search explorer Streamlit app
+# Run Search Explorer (Foreground)
 app: $(SETUP_STAMP)
-	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py
+	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py --server.port $(APP_PORT)
 
-# Run the Answer Generator (Chat) app
+# Run Answer Generator (Foreground)
 chat: $(SETUP_STAMP)
-	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/answer_generator.py
+	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/answer_generator.py --server.port $(CHAT_PORT)
+
+# --- Application Targets (Background) ---
+
+# Start Search Explorer in Background
+startapp: $(SETUP_STAMP)
+	@if lsof -i :$(APP_PORT) > /dev/null; then \
+		echo "✅ Search Explorer is already running on port $(APP_PORT)."; \
+	else \
+		echo "🚀 Starting Search Explorer (port $(APP_PORT))..."; \
+		echo "📝 Logs: tmp/app.log"; \
+		mkdir -p tmp; \
+		nohup bash -c "$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py --server.port $(APP_PORT) --server.headless true" > tmp/app.log 2>&1 & \
+		echo "⏳ Waiting for startup..."; \
+		sleep 3; \
+		if lsof -i :$(APP_PORT) > /dev/null; then \
+			echo "✅ App running at http://localhost:$(APP_PORT)"; \
+		else \
+			echo "❌ Failed to start. Check tmp/app.log"; \
+		fi \
+	fi
+
+# Stop Search Explorer
+killapp:
+	@if lsof -i :$(APP_PORT) > /dev/null; then \
+		echo "🛑 Stopping Search Explorer..."; \
+		lsof -ti :$(APP_PORT) | xargs kill; \
+		echo "✅ Search Explorer stopped."; \
+	else \
+		echo "Search Explorer is not running."; \
+	fi
+
+# Start Answer Generator in Background
+startchat: $(SETUP_STAMP)
+	@if lsof -i :$(CHAT_PORT) > /dev/null; then \
+		echo "✅ Answer Generator is already running on port $(CHAT_PORT)."; \
+	else \
+		echo "🚀 Starting Answer Generator (port $(CHAT_PORT))..."; \
+		echo "📝 Logs: tmp/chat.log"; \
+		mkdir -p tmp; \
+		nohup bash -c "$(ACTIVATE) && PYTHONPATH=. streamlit run apps/answer_generator.py --server.port $(CHAT_PORT) --server.headless true" > tmp/chat.log 2>&1 & \
+		echo "⏳ Waiting for startup..."; \
+		sleep 3; \
+		if lsof -i :$(CHAT_PORT) > /dev/null; then \
+			echo "✅ Chat running at http://localhost:$(CHAT_PORT)"; \
+		else \
+			echo "❌ Failed to start. Check tmp/chat.log"; \
+		fi \
+	fi
+
+# Stop Answer Generator
+killchat:
+	@if lsof -i :$(CHAT_PORT) > /dev/null; then \
+		echo "🛑 Stopping Answer Generator..."; \
+		lsof -ti :$(CHAT_PORT) | xargs kill; \
+		echo "✅ Answer Generator stopped."; \
+	else \
+		echo "Answer Generator is not running."; \
+	fi
 
 # --- Data Management Targets ---
 
-# Manually index the TEST database (tmp/) - useful for testing indexing logic safely
 index: $(SETUP_STAMP)
 	@echo "--- Indexing 32 talks to tmp/chroma_db_retrieval ---"
 	@rm -rf tmp/chroma_db_retrieval
@@ -82,19 +137,16 @@ index: $(SETUP_STAMP)
 		); \
 		run_indexer(env)"
 
-# Ingest the pilot data into the PRODUCTION database (data/)
 ingest-pilot: $(SETUP_STAMP)
 	@echo "--- Copying pilot data to data/raw_talks ---"
 	@mkdir -p data/raw_talks
 	@cp tests/fixtures/data/raw_talks/*.md data/raw_talks/
 	@cp tests/fixtures/data/metadata.json data/raw_talks/
 	@echo "--- Indexing pilot data to production DB (data/chroma_db) ---"
-	@# This uses rb_expert.toml configuration automatically via src/indexing.py
 	$(RUN_WITH_PATH) python -m src.indexing
 
 # --- Ollama Management Targets ---
 
-# Smart start: Only starts if not already listening on 11434
 startollama:
 	@if lsof -i :11434 > /dev/null; then \
 		echo "✅ Ollama is already running."; \
@@ -107,7 +159,6 @@ startollama:
 		if lsof -i :11434 > /dev/null; then echo "✅ Ollama started successfully."; else echo "❌ Failed to start."; fi \
 	fi
 
-# Smart kill: Finds process on port 11434 and kills it
 killollama:
 	@if lsof -i :11434 > /dev/null; then \
 		echo "🛑 Stopping Ollama..."; \
@@ -119,20 +170,16 @@ killollama:
 
 # --- Utility Targets ---
 
-# Concatenate files for LLM context
 filesdump: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) python tools/concat_files.py files.lst > tmp/filesdump.txt
 
-# Clean build/test artifacts, venv, and databases
 clean:
 	rm -rf $(VENV_DIR) .pytest_cache tmp
 	find . -name "__pycache__" -type d -prune -exec rm -rf {} +
 	find . -name "*.egg-info" -type d -prune -exec rm -rf {} +
 
-# Show project tree (excluding common noise)
 showtree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp"
 
-# Save a tree snapshot
 gentree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt
