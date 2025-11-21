@@ -25,11 +25,12 @@ User Query ──► Embedding ──► ChromaDB Retrieval ──► Context Bu
 
 | Component                  | Role                                                                 |
 |----------------------------|----------------------------------------------------------------------|
-| **sentence-transformers**  | Produces embeddings locally (MiniLM by default)                      |
-| **ChromaDB**               | Vector store with deterministic metadata + ID handling               |
-| **Custom splitter**        | Two-phase, semantic-first chunking strategy                          |
-| **Ollama**                 | Runs local LLMs (tested: `dolphin-mistral`, `gemma3n-abliterated`)   |
-| **Streamlit UI**           | Lightweight local dashboard for search with full paragraph context   |
+| **sentence-transformers** | Produces embeddings locally (MiniLM by default)                      |
+| **ChromaDB** | Vector store with deterministic metadata + ID handling               |
+| **Custom splitter** | Two-phase, semantic-first chunking strategy                          |
+| **Context Builder** | Assembles full paragraphs with XML metadata for the LLM              |
+| **Ollama** | Runs local LLMs (tested: `dolphin-mistral`, `gemma3n-abliterated`)   |
+| **Streamlit UI** | Lightweight local dashboard for search with full paragraph context   |
 
 ---
 
@@ -121,19 +122,22 @@ make filesdump      # Concatenate files for LLM context
 ```
 rob-burbea-expert/
 ├── src/
-│   ├── env.py          # Config loading (TOML) with Pydantic validation
-│   ├── models.py       # Embedding factory (real + fake for testing)
+│   ├── context.py      # RAG context assembly (ContextBuilder)
 │   ├── data_prep.py    # Text ingestion + chunking with paragraph tracking
 │   ├── database.py     # ChromaDB connector + paragraph reconstruction
-│   └── indexing.py     # Full indexing pipeline
+│   ├── env.py          # Config loading (TOML) with Pydantic validation
+│   ├── indexing.py     # Full indexing pipeline
+│   └── models.py       # Embedding factory (real + fake for testing)
 ├── apps/
 │   └── search_explorer.py  # Streamlit semantic search interface
 ├── tests/
-│   ├── test_env.py         # Configuration tests
-│   ├── test_models.py      # Embedding function tests
+│   ├── conftest.py         # Shared fixtures (real DB integration)
+│   ├── test_context.py     # Context builder tests
 │   ├── test_data_prep.py   # Data loading and chunking tests
 │   ├── test_database.py    # ChromaDB operations + paragraph reconstruction tests
+│   ├── test_env.py         # Configuration tests
 │   ├── test_indexing.py    # Full indexing pipeline tests
+│   ├── test_models.py      # Embedding function tests
 │   └── test_retrieval.py   # Retrieval validation and performance tests
 ├── tests/fixtures/
 │   └── data/
@@ -175,11 +179,11 @@ _Principle:_ every component should be independently testable and explainable.
 | Query performance benchmarking            | ✅     |
 | Search Explorer Streamlit app             | ✅     |
 | Paragraph reconstruction with highlighting| ✅     |
+| Context building for LLM prompts          | ✅     |
 | Ollama LLM integration                    | ⬜     |
-| Context building for LLM prompts          | ⬜     |
 | CLI interface                             | ⬜     |
 
-**All 32 tests passing** ✅
+**All 31 tests passing** ✅
 
 **Legend:** ✅ Complete | 🚧 In Progress | ⬜ Planned
 
@@ -196,24 +200,19 @@ pytest -q
 
 # Verbose with print statements
 pytest -v -s
-
-# Run specific test module
-pytest tests/test_retrieval.py -v -s
-
-# Show slowest tests
-pytest -v --durations=10
 ```
 
 ### Test Coverage
 
-- **Configuration**: TOML parsing, path validation, model settings
-- **Embeddings**: Determinism, dimension validation, mock vs real
+- **Configuration**: TOML parsing, path validation
+- **Embeddings**: Determinism, mock vs real
 - **Data Processing**: Markdown loading, chunking, metadata extraction
-- **Database**: ChromaDB operations, collection management, paragraph reconstruction
+- **Database**: ChromaDB operations, collection management
+- **Context Building**: Formatting, distance filtering, metadata injection
 - **Indexing**: Full pipeline with ~4,900 chunks from 32 talks
-- **Retrieval**: Semantic search, relevance validation, performance benchmarking
+- **Retrieval**: Semantic search, relevance validation
 
-Typical runtime: ~30 seconds on dev machine (includes model download on first run).
+**Note:** We use `conftest.py` to spin up temporary, isolated ChromaDB environments for robust integration testing without relying on fragile mocks.
 
 ---
 
@@ -224,38 +223,16 @@ Interactive Streamlit interface for exploring semantic search results:
 ```bash
 # Run the app (recommended)
 make app
-
-# Or run directly with PYTHONPATH set
-PYTHONPATH=. streamlit run apps/search_explorer.py
 ```
 
 **Features:**
 - Semantic search across 32 indexed talks (~4,800 chunks)
 - **Full paragraph reconstruction** with matched chunk highlighting (light green)
+- **Dense UI Layout** optimized for rapid scanning of search results
 - Adjustable distance threshold for result filtering
-- Compact, information-dense layout for pattern analysis
-- Distance metrics displayed prominently on each result
+- Distance metrics displayed prominently on each result (bold)
 - Optional chunk debug information (paragraph index, position, total chunks)
-- Clickable example queries for quick exploration
 - Real-time query performance
-
-The app automatically indexes talks on first run if the database doesn't exist.
-
----
-
-## Database Inspection
-
-Test runs persist ChromaDB files in `tmp/` for inspection:
-
-```bash
-# View directory structure
-ls -lh tmp/chroma_db_retrieval/
-
-# The database is SQLite-based
-sqlite3 tmp/chroma_db_retrieval/chroma.sqlite3 .schema
-```
-
-Each test module uses its own isolated database to prevent dimension conflicts.
 
 ---
 
@@ -264,87 +241,41 @@ Each test module uses its own isolated database to prevent dimension conflicts.
 ### Deterministic Chunk IDs
 
 Every chunk gets a stable ID: `{filename_stem}_{index}`
-
 Example: `2019-12-17-orienting-to-this-jhana-retreat_0`
 
-This enables:
-- Idempotent re-indexing (upsert semantics)
-- Consistent cross-run references
-- Traceable citations back to source talks
-
-### Embedding Validation
-
-`test_retrieval.py` validates:
-- Same text → same embedding (determinism)
-- Different texts → different embeddings (sensitivity)
-- Query results are ordered by similarity
-- Metadata (source file) is preserved
-- Performance benchmarks (~10-50ms per query)
+This enables idempotent re-indexing and traceable citations.
 
 ### Paragraph Metadata Tracking
 
-Each chunk includes metadata for paragraph reconstruction:
-
+Each chunk includes metadata to reconstruct its original context:
 ```python
 {
     "source": "path/to/talk.md",
-    "paragraph_index": 12,        # Which paragraph in the document
-    "chunk_position": 1,          # Position within paragraph (if split)
-    "total_chunks_in_para": 3     # How many chunks this paragraph became
+    "paragraph_index": 12,
+    "chunk_position": 1,
+    "total_chunks_in_para": 3
 }
 ```
 
-**Features:**
-- Enables full paragraph reconstruction from retrieved chunks
-- Supports context window expansion for LLM prompts
-- Skips boilerplate headers ("## Transcription")
-- Maintains semantic boundaries across splits
+### Paragraph Reconstruction & Context Building
 
-### Paragraph Reconstruction
+The system uses two layers of reconstruction:
 
-The `database.py` module provides two key functions for paragraph reconstruction:
-
-**`get_paragraph_chunks(collection, source, paragraph_index)`**
-- Fetches all chunks belonging to a specific paragraph
-- Returns chunks sorted by `chunk_position` for reassembly
-- Enables reconstruction of split paragraphs
-
-**`reconstruct_paragraph_with_hit(collection, source, paragraph_index, hit_chunk_position)`**
-- Reconstructs full paragraph from all its chunks
-- Wraps the matched chunk with `<hit>...</hit>` XML tags
-- Returns both plain text and marked-up versions
-- Supports downstream rendering (Streamlit UI) and LLM context building
-
-The Search Explorer uses these functions to:
-1. Retrieve a matching chunk from semantic search
-2. Reconstruct its full paragraph for complete context
-3. Highlight the matched portion using light green color (#7CFC00)
-
-### Test Database Isolation
-
-Each test suite uses a dedicated ChromaDB directory:
-- `test_database.py` → `tmp/chroma_db_database/`
-- `test_indexing.py` → `tmp/chroma_db_indexing/`
-- `test_retrieval.py` → `tmp/chroma_db_retrieval/`
-
-This prevents dimension mismatches between mock (3D) and real (384D) embeddings.
+1.  **UI Layer (`database.py`)**: Reconstructs full paragraphs for the Streamlit app, highlighting the specific chunk that triggered the search hit.
+2.  **LLM Layer (`context.py`)**: The `ContextBuilder` assembles retrieval results into a structured system prompt. It:
+    * Filters hits by distance threshold.
+    * Sorts by relevance.
+    * Retrieves full paragraphs via `get_paragraph_chunks`.
+    * Applies `<hit distance="0.25">...</hit>` XML tags so the LLM can distinguish specific evidence from surrounding context.
 
 ---
 
 ## Next Steps
 
-1. **CLI Query Interface**: Simple command-line tool to query the indexed talks
-2. **Context Builder**: Assemble relevant chunks + metadata for LLM prompts
-3. **Ollama Integration**: Send constructed prompts to local LLM
-4. **Citation Formatter**: Link responses back to specific talks and timestamps
-5. **Advanced Search Features**: Filters by retreat, date range, or speaker
-
----
-
-## Related Work
-
-- Hermes Amara Foundation: https://hermesamara.org
-- Talk transcriptions: 548 high-quality Markdown files with YAML frontmatter
+1.  **Ollama Integration**: Send constructed contexts to local LLM for Question-Answering.
+2.  **CLI Query Interface**: Simple command-line tool to query the indexed talks.
+3.  **Citation Formatter**: Link responses back to specific talks and timestamps.
+4.  **Advanced Search Features**: Filters by retreat, date range, or speaker.
 
 ---
 
