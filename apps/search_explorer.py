@@ -61,19 +61,6 @@ def format_source(source_path: str) -> str:
     return Path(source_path).stem.replace("-", " ").title()
 
 
-def convert_hit_tags_to_bold(text: str) -> str:
-    """
-    Convert <hit>...</hit> XML tags to **...** markdown bold.
-
-    Args:
-        text: Text with <hit> tags
-
-    Returns:
-        Text with markdown bold syntax
-    """
-    return text.replace("<hit>", "**").replace("</hit>", "**")
-
-
 def main():
     st.set_page_config(
         page_title="Rob Burbea Expert - Search Explorer",
@@ -81,7 +68,7 @@ def main():
         layout="wide"
     )
 
-    # Custom CSS for denser layout (Excel 8pt style)
+    # Custom CSS for denser layout with light green highlighting for hits
     st.markdown("""
         <style>
         /* Reduce all spacing and font sizes for dense layout */
@@ -121,6 +108,12 @@ def main():
         hr {
             margin: 0.5rem 0 !important;
         }
+
+        /* Light green highlighting for matched chunks */
+        hit {
+            color: #7CFC00;
+            font-weight: normal;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -158,7 +151,6 @@ def main():
 
         st.markdown("---")
         show_full_paragraph = st.checkbox("Show full paragraph", value=True)
-        show_scores = st.checkbox("Show scores", value=True)
         show_chunk_ids = st.checkbox("Show IDs", value=False)
         show_chunk_debug = st.checkbox("Show chunk debug info", value=False)
 
@@ -195,17 +187,11 @@ def main():
             st.markdown("---")
 
             for idx, result in enumerate(filtered_results, start=1):
-                # Compact result display with reduced spacing
-                col1, col2 = st.columns([4, 1])
+                # Compact header with distance on the same line
+                source_file = result['metadata'].get('source', 'Unknown')
+                distance_str = f"d={result['distance']:.4f}"
 
-                with col1:
-                    source_file = result['metadata'].get('source', 'Unknown')
-                    st.markdown(f"**#{idx} · {format_source(source_file)}**")
-
-                with col2:
-                    if show_scores:
-                        similarity_pct = max(0, (1 - result['distance']) * 100)
-                        st.metric("Sim", f"{similarity_pct:.0f}%", label_visibility="visible")
+                st.markdown(f"**#{idx} · {format_source(source_file)}** · *{distance_str}*")
 
                 # Show chunk ID if enabled
                 if show_chunk_ids:
@@ -231,8 +217,8 @@ def main():
                                 hit_chunk_position=chunk_pos
                             )
 
-                            # Convert <hit> tags to bold markdown
-                            display_text = convert_hit_tags_to_bold(reconstruction['marked_text'])
+                            # Use marked_text with <hit> tags (will be styled by CSS)
+                            display_text = reconstruction['marked_text']
 
                         else:
                             # Missing metadata - show warning
@@ -242,8 +228,8 @@ def main():
                         # Reconstruction failed - fall back to chunk
                         reconstruction_error = f"⚠️ Paragraph reconstruction failed: {str(e)}"
 
-                # Show the text (either chunk or reconstructed paragraph)
-                st.markdown(f"> {display_text}")
+                # Show the text with HTML rendering for <hit> tags
+                st.markdown(f"> {display_text}", unsafe_allow_html=True)
 
                 # Show reconstruction error if any
                 if reconstruction_error:
@@ -261,10 +247,6 @@ def main():
 
                     if debug_info:
                         st.caption(f"🔧 Chunk: {', '.join(debug_info)}")
-
-                # Show raw distance if scores enabled
-                if show_scores:
-                    st.caption(f"*d={result['distance']:.4f}*")
 
                 st.markdown("---")
 
