@@ -1,7 +1,9 @@
 (This list is an unordered list of smaller TODOs which has come up while developing the solution.)
 
-- Search Explorer UX improvements: Full paragraph reconstruction with matched chunk highlighting (complex - requires fetching all chunks from same paragraph_index and reassembling)
-- Implement HTML background color highlighting for matched chunks in Search Explorer (currently using simple line separators)
-- Fix "Type of '__init__' is incompatible with 'EmbeddingFunction'" warnings in src/models.py (PyCharm strict type checking issue)
+- (If not already done) Add test coverage for paragraph reconstruction edge cases (very long paragraphs, single-word chunks, missing metadata)
+- Implement context builder module to assemble chunks with metadata for LLM prompts
+- Integrate Ollama LLM for question-answering mode in Search Explorer
 - Consider sentence-based chunking instead of paragraph-overlap approach for better semantic coherence (deferred - requires more complex implementation)
-- Reduce whitespace between result header and quote in Search Explorer; remove "Sim" label from right side
+- Fix "Type of '__init__' is incompatible with 'EmbeddingFunction'" warnings in src/models.py (PyCharm strict type checking issue)
+- Add export functionality to save search results to markdown/JSON
+- Implement retreat/date range filters in Search Explorer sidebar

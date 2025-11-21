@@ -29,7 +29,7 @@ User Query ──► Embedding ──► ChromaDB Retrieval ──► Context Bu
 | **ChromaDB**               | Vector store with deterministic metadata + ID handling               |
 | **Custom splitter**        | Two-phase, semantic-first chunking strategy                          |
 | **Ollama**                 | Runs local LLMs (tested: `dolphin-mistral`, `gemma3n-abliterated`)   |
-| **Streamlit UI (planned)** | Lightweight local dashboard for search + QA                          |
+| **Streamlit UI**           | Lightweight local dashboard for search with full paragraph context   |
 
 ---
 
@@ -124,7 +124,7 @@ rob-burbea-expert/
 │   ├── env.py          # Config loading (TOML) with Pydantic validation
 │   ├── models.py       # Embedding factory (real + fake for testing)
 │   ├── data_prep.py    # Text ingestion + chunking with paragraph tracking
-│   ├── database.py     # ChromaDB connector wrapper
+│   ├── database.py     # ChromaDB connector + paragraph reconstruction
 │   └── indexing.py     # Full indexing pipeline
 ├── apps/
 │   └── search_explorer.py  # Streamlit semantic search interface
@@ -132,7 +132,7 @@ rob-burbea-expert/
 │   ├── test_env.py         # Configuration tests
 │   ├── test_models.py      # Embedding function tests
 │   ├── test_data_prep.py   # Data loading and chunking tests
-│   ├── test_database.py    # ChromaDB operations tests
+│   ├── test_database.py    # ChromaDB operations + paragraph reconstruction tests
 │   ├── test_indexing.py    # Full indexing pipeline tests
 │   └── test_retrieval.py   # Retrieval validation and performance tests
 ├── tests/fixtures/
@@ -174,7 +174,7 @@ _Principle:_ every component should be independently testable and explainable.
 | RAG retrieval validation & testing        | ✅     |
 | Query performance benchmarking            | ✅     |
 | Search Explorer Streamlit app             | ✅     |
-| Paragraph reconstruction for context      | 🚧     |
+| Paragraph reconstruction with highlighting| ✅     |
 | Ollama LLM integration                    | ⬜     |
 | Context building for LLM prompts          | ⬜     |
 | CLI interface                             | ⬜     |
@@ -209,7 +209,7 @@ pytest -v --durations=10
 - **Configuration**: TOML parsing, path validation, model settings
 - **Embeddings**: Determinism, dimension validation, mock vs real
 - **Data Processing**: Markdown loading, chunking, metadata extraction
-- **Database**: ChromaDB operations, collection management
+- **Database**: ChromaDB operations, collection management, paragraph reconstruction
 - **Indexing**: Full pipeline with ~4,900 chunks from 32 talks
 - **Retrieval**: Semantic search, relevance validation, performance benchmarking
 
@@ -231,9 +231,12 @@ PYTHONPATH=. streamlit run apps/search_explorer.py
 
 **Features:**
 - Semantic search across 32 indexed talks (~4,800 chunks)
-- Adjustable result count (1-50 chunks)
-- Similarity scores and distance metrics
-- Source file information for each result
+- **Full paragraph reconstruction** with matched chunk highlighting (light green)
+- Adjustable distance threshold for result filtering
+- Compact, information-dense layout for pattern analysis
+- Distance metrics displayed prominently on each result
+- Optional chunk debug information (paragraph index, position, total chunks)
+- Clickable example queries for quick exploration
 - Real-time query performance
 
 The app automatically indexes talks on first run if the database doesn't exist.
@@ -297,10 +300,25 @@ Each chunk includes metadata for paragraph reconstruction:
 - Skips boilerplate headers ("## Transcription")
 - Maintains semantic boundaries across splits
 
-This allows the app to:
-1. Retrieve a matching chunk
+### Paragraph Reconstruction
+
+The `database.py` module provides two key functions for paragraph reconstruction:
+
+**`get_paragraph_chunks(collection, source, paragraph_index)`**
+- Fetches all chunks belonging to a specific paragraph
+- Returns chunks sorted by `chunk_position` for reassembly
+- Enables reconstruction of split paragraphs
+
+**`reconstruct_paragraph_with_hit(collection, source, paragraph_index, hit_chunk_position)`**
+- Reconstructs full paragraph from all its chunks
+- Wraps the matched chunk with `<hit>...</hit>` XML tags
+- Returns both plain text and marked-up versions
+- Supports downstream rendering (Streamlit UI) and LLM context building
+
+The Search Explorer uses these functions to:
+1. Retrieve a matching chunk from semantic search
 2. Reconstruct its full paragraph for complete context
-3. Highlight the matched portion within the paragraph
+3. Highlight the matched portion using light green color (#7CFC00)
 
 ### Test Database Isolation
 
@@ -319,7 +337,7 @@ This prevents dimension mismatches between mock (3D) and real (384D) embeddings.
 2. **Context Builder**: Assemble relevant chunks + metadata for LLM prompts
 3. **Ollama Integration**: Send constructed prompts to local LLM
 4. **Citation Formatter**: Link responses back to specific talks and timestamps
-5. **Streamlit Dashboard**: Visual interface for exploration
+5. **Advanced Search Features**: Filters by retreat, date range, or speaker
 
 ---
 
