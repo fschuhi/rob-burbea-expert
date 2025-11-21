@@ -17,6 +17,7 @@ apps/search_explorer.py
 src/context.py
 src/data_prep.py
 src/database.py
+src/engine.py
 src/env.py
 src/indexing.py
 src/llm.py
