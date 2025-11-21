@@ -60,7 +60,7 @@ sandbox/
 tmp/
 tests/baks/
 tests/tmp/
-files*.lst
+files.lst
 project-tree.txt
 
 # Configuration files
