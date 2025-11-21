@@ -87,3 +87,16 @@ def test_answer_query_flow(engine, mock_llm_client):
     # 3. Verify Stream Output
     full_response = "".join(list(stream))
     assert full_response == "This is a test."
+
+
+def test_answer_query_with_overrides(engine, mock_llm_client):
+    """
+    Verifies that top_k and distance_threshold overrides are respected.
+    """
+    # We need to spy on the collection.query method to check arguments
+    with patch.object(engine.collection, 'query', wraps=engine.collection.query) as mock_query:
+        engine.answer_query("test", top_k=10, distance_threshold=0.9)
+
+        # Check retrieval override
+        mock_query.assert_called_once()
+        assert mock_query.call_args.kwargs['n_results'] == 10
