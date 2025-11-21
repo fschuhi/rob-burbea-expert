@@ -8,6 +8,7 @@ Usage:
 """
 
 import streamlit as st
+import markdown
 from pathlib import Path
 
 from src.env import Env, Paths, RAG, IO, Models
@@ -71,11 +72,11 @@ def main():
         <style>
         /* 1. Global Layout Tightening */
         .block-container {
-            padding-top: 3rem;
+            padding-top: 3rem; /* Increased to fix title clipping */
             padding-bottom: 2rem;
         }
 
-        /* 2. Dense Headers (Restored from your original) */
+        /* 2. Dense Headers */
         h1 {
             font-size: 1.5rem !important;
             margin-bottom: 0.25rem !important;
@@ -199,6 +200,14 @@ def main():
                     except Exception as e:
                         reconstruction_error = f"⚠️ Reconstruction failed: {str(e)}"
 
+                # ---------------------------------------------------------
+                # MARKDOWN TO HTML CONVERSION
+                # We convert the markdown (e.g. *italics*) to HTML using the standard library.
+                # We then strip the <p> tags it adds to maintain our tight layout.
+                # ---------------------------------------------------------
+                html_content = markdown.markdown(display_text)
+                html_content = html_content.replace("<p>", "").replace("</p>", "")
+
                 source_file = result['metadata'].get('source', 'Unknown')
 
                 # Optional: Chunk ID HTML
@@ -207,7 +216,7 @@ def main():
                     chunk_id_div = f'<div style="font-size: 0.7rem; color: #666; margin-bottom: 2px; font-family: monospace;">ID: {result["id"]}</div>'
 
                 # ---------------------------------------------------------
-                # HTML CONSTRUCTION
+                # HTML CARD CONSTRUCTION
                 # ---------------------------------------------------------
                 card_html = (
                     f'<div class="result-card" style="margin-bottom: 0px;">'
@@ -222,9 +231,10 @@ def main():
                     # ID (optional)
                     f'{chunk_id_div}'
 
-                    # Content Block (Simulated Blockquote)
+                    # Content Block
+                    # We insert 'html_content' instead of raw 'display_text'
                     f'<div style="margin-top: 2px; margin-bottom: 0; padding: 0.25rem 0.75rem; border-left: 3px solid #444; background-color: transparent; font-size: 0.9rem; line-height: 1.5;">'
-                    f'{display_text}'
+                    f'{html_content}'
                     f'</div>'
                     f'</div>'
                 )

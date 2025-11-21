@@ -21,6 +21,7 @@ flake8>=6.0.0
 
 # Web UI frontend
 streamlit>=1.30.0
+Markdown>=3.4
 
 # --- Optional / Future ---
 # langchain-text-splitters  # Removed: We use our custom manual splitter in data_prep.py
