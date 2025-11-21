@@ -4,51 +4,54 @@ VENV_ACTIVATE = $(VENV_DIR)/bin/activate
 ACTIVATE = . $(VENV_ACTIVATE)
 PIP = $(ACTIVATE) && pip
 # RUN_WITH_PATH sets PYTHONPATH to find the 'src' directory
-RUN_WITH_PATH = $(ACTIVATE) && PYTHONPATH=src
+RUN_WITH_PATH = $(ACTIVATE) && PYTHONPATH=.
 # The sentinel file to check if setup is complete
 SETUP_STAMP = $(VENV_DIR)/.setup_stamp
 
-# --- Phony targets (commands that don't produce files) ---
-.PHONY: all setup test test-verbose test-fast index app clean showtree gentree filesdump
+# --- Phony targets ---
+.PHONY: all setup test test-verbose test-fast index app chat clean showtree gentree filesdump startollama killollama ingest-pilot
 
-# Default target runs 'setup'
 all: setup
 
-# --- Virtual Environment Setup ---
-# This recipe will only run if the 'activate' file does not exist.
+# --- Setup ---
 $(VENV_ACTIVATE):
 	python3 -m venv $(VENV_DIR)
 
-# Smart 'setup' target - only runs if dependencies changed
 $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Installing dependencies ---"
 	$(PIP) install -r requirements.txt
 	@echo "--- Installing project in editable mode ---"
 	$(PIP) install -e .
+	@# Auto-create config if missing
+	@if [ ! -f rb_expert.toml ]; then \
+		echo "--- Creating default configuration (rb_expert.toml) ---"; \
+		cp rb_expert.example.toml rb_expert.toml; \
+	fi
 	@echo "--- Setup complete ---"
 	@touch $(SETUP_STAMP)
 
-# 'setup' is a friendly alias for the stamp file
 setup: $(SETUP_STAMP)
 
-# --- Testing Targets ---
-
-# Run all tests (quiet mode)
+# --- Testing ---
 test: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q
 
-# Run tests with verbose output and print statements
 test-verbose: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -v -s
 
-# Run fast tests only (skip retrieval tests that do full indexing)
 test-fast: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q --ignore=tests/test_retrieval.py
 
-# --- Indexing Targets ---
+# --- Application ---
+app: $(SETUP_STAMP)
+	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py
 
-# Index the 32 test talks into the retrieval database
-# This is useful for manually refreshing the database used by the app
+chat: $(SETUP_STAMP)
+	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/answer_generator.py
+
+# --- Data Management ---
+
+# Manually index the TEST database (tmp/)
 index: $(SETUP_STAMP)
 	@echo "--- Indexing 32 talks to tmp/chroma_db_retrieval ---"
 	@rm -rf tmp/chroma_db_retrieval
@@ -68,28 +71,49 @@ index: $(SETUP_STAMP)
 		); \
 		run_indexer(env)"
 
-# --- Application Targets ---
+# NEW: Ingest the pilot data into the PRODUCTION database (data/)
+ingest-pilot: $(SETUP_STAMP)
+	@echo "--- Copying pilot data to data/raw_talks ---"
+	@mkdir -p data/raw_talks
+	@cp tests/fixtures/data/raw_talks/*.md data/raw_talks/
+	@cp tests/fixtures/data/metadata.json data/raw_talks/
+	@echo "--- Indexing pilot data to production DB (data/chroma_db) ---"
+	@# This uses rb_expert.toml configuration automatically
+	$(RUN_WITH_PATH) python src/indexing.py
 
-# Run the search explorer Streamlit app
-app: $(SETUP_STAMP)
-	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py
+# --- Ollama Management ---
+startollama:
+	@if lsof -i :11434 > /dev/null; then \
+		echo "✅ Ollama is already running."; \
+	else \
+		echo "🚀 Starting Ollama in background (logs in tmp/ollama.log)..."; \
+		mkdir -p tmp; \
+		ollama serve > tmp/ollama.log 2>&1 & \
+		echo "Waiting for startup..."; \
+		sleep 3; \
+		if lsof -i :11434 > /dev/null; then echo "✅ Ollama started successfully."; else echo "❌ Failed to start."; fi \
+	fi
 
-# --- Utility Targets ---
+killollama:
+	@if lsof -i :11434 > /dev/null; then \
+		echo "🛑 Stopping Ollama..."; \
+		lsof -ti :11434 | xargs kill; \
+		echo "✅ Ollama stopped."; \
+	else \
+		echo "Ollama is not running."; \
+	fi
 
-# Concatenate files for LLM context
+# --- Utilities ---
 filesdump: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) python tools/concat_files.py files.lst > tmp/filesdump.txt
 
-# Clean build/test artifacts, venv, and databases
 clean:
 	rm -rf $(VENV_DIR) .pytest_cache tmp
 	find . -name "__pycache__" -type d -prune -exec rm -rf {} +
 	find . -name "*.egg-info" -type d -prune -exec rm -rf {} +
 
-# Show project tree (excluding common noise)
 showtree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp"
 
-# Save a tree snapshot
 gentree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt

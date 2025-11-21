@@ -104,9 +104,15 @@ make test-fast      # Skip slow indexing tests
 
 # Application
 make app            # Launch Search Explorer Streamlit app
+make chat           # Launch Answer Generator AI app
 
-# Indexing
-make index          # Manually index 32 talks to tmp/chroma_db_retrieval
+# Data Management
+make ingest-pilot   # Copy pilot data to data/ and index it (PRODUCTION DB)
+make index          # Index pilot data to tmp/ (TEST DB only)
+
+# Ollama
+make startollama    # Safely start Ollama in the background
+make killollama     # Stop the running Ollama process
 
 # Utilities
 make clean          # Remove venv, caches, and tmp databases
@@ -122,16 +128,21 @@ make filesdump      # Concatenate files for LLM context
 ```
 rob-burbea-expert/
 ├── src/
+│   ├── engine.py       # RAG Orchestrator (RAGEngine)
 │   ├── context.py      # RAG context assembly (ContextBuilder)
+│   ├── llm.py          # Ollama API Client
 │   ├── data_prep.py    # Text ingestion + chunking with paragraph tracking
 │   ├── database.py     # ChromaDB connector + paragraph reconstruction
 │   ├── env.py          # Config loading (TOML) with Pydantic validation
 │   ├── indexing.py     # Full indexing pipeline
 │   └── models.py       # Embedding factory (real + fake for testing)
 ├── apps/
+│   ├── answer_generator.py # Streamlit AI Chat interface
 │   └── search_explorer.py  # Streamlit semantic search interface
 ├── tests/
 │   ├── conftest.py         # Shared fixtures (real DB integration)
+│   ├── test_engine.py      # RAG Engine integration tests
+│   ├── test_llm.py         # Ollama Client tests
 │   ├── test_context.py     # Context builder tests
 │   ├── test_data_prep.py   # Data loading and chunking tests
 │   ├── test_database.py    # ChromaDB operations + paragraph reconstruction tests
@@ -146,7 +157,7 @@ rob-burbea-expert/
 ├── tmp/                    # Test databases (gitignored, for inspection)
 │   ├── chroma_db_database/
 │   ├── chroma_db_indexing/
-│   └── chroma_db_retrieval/
+│   ├── chroma_db_retrieval/
 ├── tools/                  # Utility scripts
 │   └── concat_files.py     # File concatenation for LLM context
 └── data/                   # Runtime artifacts (gitignored)
@@ -180,10 +191,11 @@ _Principle:_ every component should be independently testable and explainable.
 | Search Explorer Streamlit app             | ✅     |
 | Paragraph reconstruction with highlighting| ✅     |
 | Context building for LLM prompts          | ✅     |
-| Ollama LLM integration                    | ⬜     |
+| Ollama LLM integration                    | ✅     |
+| Answer Generator Streamlit app            | ✅     |
 | CLI interface                             | ⬜     |
 
-**All 31 tests passing** ✅
+**All 42 tests passing** ✅
 
 **Legend:** ✅ Complete | 🚧 In Progress | ⬜ Planned
 
@@ -211,8 +223,9 @@ pytest -v -s
 - **Context Building**: Formatting, distance filtering, metadata injection
 - **Indexing**: Full pipeline with ~4,900 chunks from 32 talks
 - **Retrieval**: Semantic search, relevance validation
+- **RAG Engine**: Full integration tests (DB -> Context -> LLM Mock)
 
-**Note:** We use `conftest.py` to spin up temporary, isolated ChromaDB environments for robust integration testing without relying on fragile mocks.
+**Note:** We use `conftest.py` to spin up temporary, isolated ChromaDB environments for robust integration testing without relying on fragile mocks for the database layer.
 
 ---
 
@@ -233,6 +246,23 @@ make app
 - Distance metrics displayed prominently on each result (bold)
 - Optional chunk debug information (paragraph index, position, total chunks)
 - Real-time query performance
+
+---
+
+## Answer Generator App
+
+Chat-based RAG interface for asking questions:
+
+```bash
+# Run the app
+make chat
+```
+
+**Features:**
+- **Conversational Interface**: Ask natural language questions.
+- **Live Streaming**: Watch the answer type out in real-time.
+- **Source Transparency**: Every answer includes an expandable "View Context Used" section showing exactly what paragraphs (with highlighting) were sent to the LLM.
+- **Model-Agnostic**: Uses whichever model is configured in `rb_expert.toml` (e.g., Dolphin Mistral).
 
 ---
 
@@ -272,10 +302,9 @@ The system uses two layers of reconstruction:
 
 ## Next Steps
 
-1.  **Ollama Integration**: Send constructed contexts to local LLM for Question-Answering.
-2.  **CLI Query Interface**: Simple command-line tool to query the indexed talks.
-3.  **Citation Formatter**: Link responses back to specific talks and timestamps.
-4.  **Advanced Search Features**: Filters by retreat, date range, or speaker.
+1.  **CLI Query Interface**: Simple command-line tool to query the indexed talks.
+2.  **Citation Formatter**: Link responses back to specific talks and timestamps.
+3.  **Advanced Search Features**: Filters by retreat, date range, or speaker.
 
 ---
 
