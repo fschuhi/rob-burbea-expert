@@ -8,15 +8,18 @@ RUN_WITH_PATH = $(ACTIVATE) && PYTHONPATH=.
 # The sentinel file to check if setup is complete
 SETUP_STAMP = $(VENV_DIR)/.setup_stamp
 
-# --- Phony targets ---
+# --- Phony targets (commands that don't produce files) ---
 .PHONY: all setup test test-verbose test-fast index app chat clean showtree gentree filesdump startollama killollama ingest-pilot
 
+# Default target runs 'setup'
 all: setup
 
-# --- Setup ---
+# --- Virtual Environment Setup ---
+# This recipe will only run if the 'activate' file does not exist.
 $(VENV_ACTIVATE):
 	python3 -m venv $(VENV_DIR)
 
+# Smart 'setup' target - only runs if dependencies changed
 $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Installing dependencies ---"
 	$(PIP) install -r requirements.txt
@@ -30,28 +33,36 @@ $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Setup complete ---"
 	@touch $(SETUP_STAMP)
 
+# 'setup' is a friendly alias for the stamp file
 setup: $(SETUP_STAMP)
 
-# --- Testing ---
+# --- Testing Targets ---
+
+# Run all tests (quiet mode)
 test: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q
 
+# Run tests with verbose output and print statements
 test-verbose: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -v -s
 
+# Run fast tests only (skip retrieval tests that do full indexing)
 test-fast: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) pytest -q --ignore=tests/test_retrieval.py
 
-# --- Application ---
+# --- Application Targets ---
+
+# Run the search explorer Streamlit app
 app: $(SETUP_STAMP)
 	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py
 
+# Run the Answer Generator (Chat) app
 chat: $(SETUP_STAMP)
 	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/answer_generator.py
 
-# --- Data Management ---
+# --- Data Management Targets ---
 
-# Manually index the TEST database (tmp/)
+# Manually index the TEST database (tmp/) - useful for testing indexing logic safely
 index: $(SETUP_STAMP)
 	@echo "--- Indexing 32 talks to tmp/chroma_db_retrieval ---"
 	@rm -rf tmp/chroma_db_retrieval
@@ -71,17 +82,19 @@ index: $(SETUP_STAMP)
 		); \
 		run_indexer(env)"
 
-# NEW: Ingest the pilot data into the PRODUCTION database (data/)
+# Ingest the pilot data into the PRODUCTION database (data/)
 ingest-pilot: $(SETUP_STAMP)
 	@echo "--- Copying pilot data to data/raw_talks ---"
 	@mkdir -p data/raw_talks
 	@cp tests/fixtures/data/raw_talks/*.md data/raw_talks/
 	@cp tests/fixtures/data/metadata.json data/raw_talks/
 	@echo "--- Indexing pilot data to production DB (data/chroma_db) ---"
-	@# This uses rb_expert.toml configuration automatically
-	$(RUN_WITH_PATH) python src/indexing.py
+	@# This uses rb_expert.toml configuration automatically via src/indexing.py
+	$(RUN_WITH_PATH) python -m src.indexing
 
-# --- Ollama Management ---
+# --- Ollama Management Targets ---
+
+# Smart start: Only starts if not already listening on 11434
 startollama:
 	@if lsof -i :11434 > /dev/null; then \
 		echo "✅ Ollama is already running."; \
@@ -94,6 +107,7 @@ startollama:
 		if lsof -i :11434 > /dev/null; then echo "✅ Ollama started successfully."; else echo "❌ Failed to start."; fi \
 	fi
 
+# Smart kill: Finds process on port 11434 and kills it
 killollama:
 	@if lsof -i :11434 > /dev/null; then \
 		echo "🛑 Stopping Ollama..."; \
@@ -103,17 +117,22 @@ killollama:
 		echo "Ollama is not running."; \
 	fi
 
-# --- Utilities ---
+# --- Utility Targets ---
+
+# Concatenate files for LLM context
 filesdump: $(SETUP_STAMP)
 	$(RUN_WITH_PATH) python tools/concat_files.py files.lst > tmp/filesdump.txt
 
+# Clean build/test artifacts, venv, and databases
 clean:
 	rm -rf $(VENV_DIR) .pytest_cache tmp
 	find . -name "__pycache__" -type d -prune -exec rm -rf {} +
 	find . -name "*.egg-info" -type d -prune -exec rm -rf {} +
 
+# Show project tree (excluding common noise)
 showtree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp"
 
+# Save a tree snapshot
 gentree:
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt

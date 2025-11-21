@@ -195,7 +195,7 @@ _Principle:_ every component should be independently testable and explainable.
 | Answer Generator Streamlit app            | ✅     |
 | CLI interface                             | ⬜     |
 
-**All 42 tests passing** ✅
+**All 43 tests passing** ✅
 
 **Legend:** ✅ Complete | 🚧 In Progress | ⬜ Planned
 
@@ -263,6 +263,7 @@ make chat
 - **Live Streaming**: Watch the answer type out in real-time.
 - **Source Transparency**: Every answer includes an expandable "View Context Used" section showing exactly what paragraphs (with highlighting) were sent to the LLM.
 - **Model-Agnostic**: Uses whichever model is configured in `rb_expert.toml` (e.g., Dolphin Mistral).
+- **Live Tuning**: Adjust `Top K` (number of context chunks) and `Distance Threshold` directly in the sidebar to refine the AI's knowledge retrieval.
 
 ---
 

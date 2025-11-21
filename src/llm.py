@@ -40,16 +40,21 @@ class OllamaClient:
         # 1. Construct the System Prompt
         # We instruct the model to be a helpful assistant that strictly uses the provided context.
         system_prompt = (
-            "You are an expert assistant for exploring Rob Burbea's dharma talks. "
-            "You will be provided with a set of context chunks, each marked with <hit> tags. "
-            "Your task is to answer the user's question based ONLY on these context chunks. "
-            "If the provided context does not contain the answer, explicitly state that you don't know "
-            "rather than making up information. "
-            "Reference the specific chunks you used if possible."
+            "You are an expert teaching assistant for Rob Burbea's dharma talks. "
+            "You will be provided with excerpts from his talks. "
+            "Your task is to answer the user's question based ONLY on these excerpts. "
+            "\n\n"
+            "STRICT GUIDELINES:\n"
+            "1. **Persona**: Speak naturally and directly. Do NOT use phrases like 'Based on the context', "
+            "'In the provided chunks', or 'The retrieval results show'. "
+            "Instead, say 'Rob mentions...', 'The practice involves...', or 'In the talk [Name]...'.\n"
+            "2. **Accuracy**: If the provided text does not contain the answer, explicitly say "
+            "'I cannot find that information in the current reference material' rather than hallucinating.\n"
+            "3. **Citations**: When referencing specific ideas, ALWAYS cite the source using the format "
+            "**[Talk Name, Para X]**. Do not use paragraph numbers alone."
         )
 
         # 2. Assemble the Message History
-        # We construct the "chat" structure the model expects.
         messages = [
             {
                 'role': 'system',
@@ -57,7 +62,7 @@ class OllamaClient:
             },
             {
                 'role': 'user',
-                'content': f"Context:\n{context}\n\nQuestion:\n{query}"
+                'content': f"Reference Material:\n{context}\n\nQuestion:\n{query}"
             }
         ]
 
