@@ -1,7 +1,5 @@
 (This list is an unordered list of smaller TODOs which has come up while developing the solution.)
 
-- (If not already done) Add test coverage for paragraph reconstruction edge cases (very long paragraphs, single-word chunks, missing metadata)
-- Implement context builder module to assemble chunks with metadata for LLM prompts
 - Integrate Ollama LLM for question-answering mode in Search Explorer
 - Consider sentence-based chunking instead of paragraph-overlap approach for better semantic coherence (deferred - requires more complex implementation)
 - Fix "Type of '__init__' is incompatible with 'EmbeddingFunction'" warnings in src/models.py (PyCharm strict type checking issue)
