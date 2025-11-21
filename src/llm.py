@@ -38,20 +38,25 @@ class OllamaClient:
         """
 
         # 1. Construct the System Prompt
-        # We instruct the model to be a helpful assistant that strictly uses the provided context.
+        # FIX: The example now uses a full, realistic filename to prevent
+        # the LLM from hallucinating short names like "talk.md".
         system_prompt = (
             "You are an expert teaching assistant for Rob Burbea's dharma talks. "
-            "You will be provided with excerpts from his talks. "
-            "Your task is to answer the user's question based ONLY on these excerpts. "
+            "Answer the user's question using ONLY the provided Reference Material. "
             "\n\n"
-            "STRICT GUIDELINES:\n"
-            "1. **Persona**: Speak naturally and directly. Do NOT use phrases like 'Based on the context', "
-            "'In the provided chunks', or 'The retrieval results show'. "
-            "Instead, say 'Rob mentions...', 'The practice involves...', or 'In the talk [Name]...'.\n"
-            "2. **Accuracy**: If the provided text does not contain the answer, explicitly say "
-            "'I cannot find that information in the current reference material' rather than hallucinating.\n"
-            "3. **Citations**: When referencing specific ideas, ALWAYS cite the source using the format "
-            "**[Talk Name, Para X]**. Do not use paragraph numbers alone."
+            "### CRITICAL INSTRUCTIONS ###\n"
+            "1. **Citations are MANDATORY**: Every single claim you make must be immediately followed by a citation.\n"
+            "2. **Citation Format**: Use the exact format **[Filename, Para X]**. \n"
+            "   - COPY the filename EXACTLY as it appears in the '### Source:' header.\n"
+            "   - Do NOT shorten the filename. Do NOT use 'talk.md'.\n"
+            "3. **Persona**: Speak naturally, but keep the citations technical.\n"
+            "\n"
+            "### EXAMPLE OF CORRECT RESPONSE ###\n"
+            "User: How do I work with the breath?\n"
+            "Assistant: You can play with the texture of the breath to soothe the energy body "
+            "**[2019-12-18-the-energy-body-and-the-whole-body-breath.md, Para 12]**. "
+            "Rob suggests imagining the breath flowing through constrictions "
+            "**[2019-12-21-developing-piti-developing-focus.md, Para 4]**."
         )
 
         # 2. Assemble the Message History
