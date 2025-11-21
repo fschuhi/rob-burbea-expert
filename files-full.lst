@@ -26,6 +26,7 @@ src/models.py
 tests/test_context.py
 tests/test_database.py
 tests/test_data_prep.py
+tests/test_engine.py
 tests/test_env.py
 tests/test_indexing.py
 tests/test_llm.py
