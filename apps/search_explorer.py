@@ -1,9 +1,13 @@
 """
 Search Explorer - Semantic search interface for Rob Burbea talks.
 
+Features:
+- Semantic Vector Search (ChromaDB)
+- Dynamic "Max Results" Slider (Parity Party)
+- Full Paragraph Reconstruction with Highlights
+- Production Environment Loading
+
 Usage:
-    streamlit run apps/search_explorer.py
-    OR
     make app
 """
 
@@ -11,8 +15,7 @@ import streamlit as st
 import markdown
 from pathlib import Path
 
-from src.env import Env, Paths, RAG, IO, Models
-from src.indexing import run_indexer
+from src.env import load_env
 from src.database import ChromaConnector, reconstruct_paragraph_with_hit
 from src.models import get_embedding_function
 
@@ -20,37 +23,16 @@ from src.models import get_embedding_function
 @st.cache_resource
 def get_collection():
     """
-    Initialize the database and return the collection.
-    Uses Streamlit cache so this only runs once per session.
+    Initialize the database connection using the project configuration.
+    Uses Streamlit cache to avoid reloading the heavy embedding model.
     """
-    project_root = Path(__file__).parent.parent
-    chroma_dir = project_root / "tmp" / "chroma_db_retrieval"
-    fixtures_dir = project_root / "tests" / "fixtures" / "data"
+    # Load the real environment (rb_expert.toml)
+    env = load_env()
 
-    env = Env(
-        paths=Paths(
-            data_dir=fixtures_dir,
-            raw_talks_dir=fixtures_dir / "raw_talks",
-            chroma_db_dir=chroma_dir,
-            metadata_path=fixtures_dir / "metadata.json"
-        ),
-        rag=RAG(chunk_size=500, chunk_overlap=0),
-        io=IO(create_missing_dirs=True),
-        models=Models(embedding_model="all-MiniLM-L6-v2")
-    )
-
-    # Check if database exists and has data
+    # Connect to the Production Database
     connector = ChromaConnector(env)
     ef = get_embedding_function(env.models.embedding_model)
     collection = connector.get_collection("rob_burbea_talks", embedding_function=ef)
-
-    # If empty, index the talks
-    if collection.count() == 0:
-        st.info("🔄 Database is empty. Indexing 32 talks... (this takes ~20 seconds)")
-        with st.spinner("Indexing talks..."):
-            run_indexer(env)
-        st.success(f"✅ Indexed {collection.count()} chunks!")
-        st.rerun()  # Refresh to show the updated state
 
     return collection, env
 
@@ -61,18 +43,15 @@ def format_source(source_path: str) -> str:
 
 
 def main():
-    st.set_page_config(
-        page_title="Rob Burbea Expert - Search Explorer",
-        page_icon="🧘",
-        layout="wide"
-    )
+    st.set_page_config(page_title="Rob Burbea Expert - Search Explorer", page_icon="🧘", layout="wide")
 
-    # Custom CSS
-    st.markdown("""
+    # Custom CSS for the "Card" look
+    st.markdown(
+        """
         <style>
         /* 1. Global Layout Tightening */
         .block-container {
-            padding-top: 3rem; /* Increased to fix title clipping */
+            padding-top: 3rem;
             padding-bottom: 2rem;
         }
 
@@ -91,7 +70,7 @@ def main():
 
         /* 3. Tighten Horizontal Lines */
         hr {
-            margin: 0.15rem 0 !important; /* Very tight vertical spacing */
+            margin: 0.15rem 0 !important;
         }
 
         /* 4. Result Card Styling */
@@ -109,47 +88,62 @@ def main():
             padding: 0 2px;
         }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("🧘 Rob Burbea Expert - Semantic Search Explorer")
-    st.markdown("*32 talks from 'Practising the Jhānas' (2019-2020)*")
 
-    # Initialize collection
-    collection, env = get_collection()
+    try:
+        collection, env = get_collection()
+    except Exception as e:
+        st.error(f"Failed to load database: {e}")
+        st.stop()
 
-    # Sidebar Settings
+    # --- SIDEBAR ---
     with st.sidebar:
         st.header("📊 Database")
-        st.metric("Chunks", collection.count())
-        st.caption(f"DB: `tmp/chroma_db_retrieval`")
+        st.metric("Total Chunks", collection.count())
+
+        st.caption(f"**Embedder:** `{env.models.embedding_model}`")
+        st.caption(f"**Path:** `{env.paths.chroma_db_dir.name}`")
 
         st.markdown("---")
-        st.header("⚙️ Settings")
+        st.header("⚙️ Tuning")
 
-        distance_threshold = st.slider(
-            "Max distance",
-            min_value=0.0,
-            max_value=2.0,
-            value=0.6,
-            step=0.05,
-            help="Lower = more similar. Cosine distance: 0=identical"
+        # PARITY PARTY: Added Max Results slider
+        n_results = st.slider(
+            "Max Results",
+            min_value=5,
+            max_value=100,
+            value=20,
+            step=5,
+            help="How many chunks to retrieve from the vector database.",
         )
 
-        st.caption("• 0.0-0.3: Highly relevant\n• 0.3-0.5: Relevant\n• 0.5-0.8: Loosely related")
+        distance_threshold = st.slider(
+            "Max Distance",
+            min_value=0.0,
+            max_value=2.0,
+            value=env.rag.similarity_threshold,  # Use config default
+            step=0.05,
+            help="Lower = more similar. Cosine distance: 0=identical, 1=unrelated.",
+        )
+
+        st.caption("• 0.0-0.7: Relevant\n• 0.7-1.0: Loosely related")
         st.markdown("---")
         show_full_paragraph = st.checkbox("Show full paragraph", value=True)
         show_chunk_ids = st.checkbox("Show IDs", value=False)
-        show_chunk_debug = st.checkbox("Show chunk debug info", value=False)
+        show_chunk_debug = st.checkbox("Show debug info", value=False)
 
-    # Query Handling
-    if 'search_query' not in st.session_state:
+    # --- QUERY HANDLING ---
+    if "search_query" not in st.session_state:
         st.session_state.search_query = ""
 
-    st.markdown("---")
     query = st.text_input(
         "🔍 Search:",
         value=st.session_state.search_query,
-        placeholder="e.g., 'energy body practice' or 'what is the first jhana?'"
+        placeholder="e.g., 'energy body practice' or 'what is the first jhana?'",
     )
 
     if query != st.session_state.search_query:
@@ -157,112 +151,102 @@ def main():
 
     if query:
         with st.spinner("Searching..."):
-            results = collection.query(
-                query_texts=[query],
-                n_results=100
-            )
+            # Use the dynamic slider value for n_results
+            results = collection.query(query_texts=[query], n_results=n_results)
 
-        # Filter results
+        # Filter results by distance
         filtered_results = []
-        for idx in range(len(results['ids'][0])):
-            if results['distances'][0][idx] <= distance_threshold:
-                filtered_results.append({
-                    'id': results['ids'][0][idx],
-                    'document': results['documents'][0][idx],
-                    'metadata': results['metadatas'][0][idx],
-                    'distance': results['distances'][0][idx]
-                })
+        if results["ids"]:
+            # Access [0] because we sent a single query
+            for idx in range(len(results["ids"][0])):
+                dist = results["distances"][0][idx]
+                if dist <= distance_threshold:
+                    filtered_results.append(
+                        {
+                            "id": results["ids"][0][idx],
+                            "document": results["documents"][0][idx],
+                            "metadata": results["metadatas"][0][idx],
+                            "distance": dist,
+                        }
+                    )
 
         if filtered_results:
-            st.markdown(f"**{len(filtered_results)} chunks with distance ≤ {distance_threshold}**")
+            st.markdown(f"Found **{len(filtered_results)}** chunks (Distance ≤ {distance_threshold})")
             st.markdown("---")
 
             for idx, result in enumerate(filtered_results, start=1):
-                display_text = result['document']
+                display_text = result["document"]
                 reconstruction_error = None
 
+                # Attempt to reconstruct full paragraph context
                 if show_full_paragraph:
                     try:
-                        source = result['metadata'].get('source')
-                        para_idx = result['metadata'].get('paragraph_index')
-                        chunk_pos = result['metadata'].get('chunk_position')
+                        source = result["metadata"].get("source")
+                        # Convert to int if stored as float/str in DB
+                        para_idx = int(result["metadata"].get("paragraph_index", -1))
+                        chunk_pos = int(result["metadata"].get("chunk_position", -1))
 
-                        if source is not None and para_idx is not None and chunk_pos is not None:
+                        if source is not None and para_idx >= 0 and chunk_pos >= 0:
                             reconstruction = reconstruct_paragraph_with_hit(
-                                collection,
-                                source=source,
-                                paragraph_index=para_idx,
-                                hit_chunk_position=chunk_pos
+                                collection, source=source, paragraph_index=para_idx, hit_chunk_position=chunk_pos
                             )
-                            display_text = reconstruction['marked_text']
+                            display_text = reconstruction["marked_text"]
                         else:
-                            reconstruction_error = "⚠️ Missing metadata"
+                            reconstruction_error = "⚠️ Missing metadata for reconstruction"
                     except Exception as e:
+                        # Fallback to raw text if reconstruction fails
                         reconstruction_error = f"⚠️ Reconstruction failed: {str(e)}"
 
-                # ---------------------------------------------------------
-                # MARKDOWN TO HTML CONVERSION
-                # We convert the markdown (e.g. *italics*) to HTML using the standard library.
-                # We then strip the <p> tags it adds to maintain our tight layout.
-                # ---------------------------------------------------------
+                # HTML Formatting
                 html_content = markdown.markdown(display_text)
+                # Strip <p> tags for tighter layout
                 html_content = html_content.replace("<p>", "").replace("</p>", "")
 
-                source_file = result['metadata'].get('source', 'Unknown')
+                source_file = result["metadata"].get("source", "Unknown")
 
-                # Optional: Chunk ID HTML
+                # Optional Debug info
                 chunk_id_div = ""
                 if show_chunk_ids:
                     chunk_id_div = f'<div style="font-size: 0.7rem; color: #666; margin-bottom: 2px; font-family: monospace;">ID: {result["id"]}</div>'
 
-                # ---------------------------------------------------------
-                # HTML CARD CONSTRUCTION
-                # ---------------------------------------------------------
+                # Card HTML Construction
                 card_html = (
-                    f'<div class="result-card" style="margin-bottom: 0px;">'
-                    # Header Row (Flexbox)
+                    f'<div class="result-card">'
                     f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">'
-                    # Left: Index + Filename
+                    # Left: Filename
                     f'<span style="font-weight: bold; font-size: 1rem;">#{idx} · {format_source(source_file)}</span>'
-                    # Right: Distance (Bold and same size as title)
-                    f'<span style="font-weight: bold; font-size: 1rem;">{result["distance"]:.4f}</span>'
-                    f'</div>'
-
-                    # ID (optional)
-                    f'{chunk_id_div}'
-
-                    # Content Block
-                    # We insert 'html_content' instead of raw 'display_text'
-                    f'<div style="margin-top: 2px; margin-bottom: 0; padding: 0.25rem 0.75rem; border-left: 3px solid #444; background-color: transparent; font-size: 0.9rem; line-height: 1.5;">'
-                    f'{html_content}'
-                    f'</div>'
-                    f'</div>'
+                    # Right: Distance Score
+                    f'<span style="font-weight: bold; font-size: 1rem; color: #888;">{result["distance"]:.4f}</span>'
+                    f"</div>"
+                    f"{chunk_id_div}"
+                    # Content Body
+                    f'<div style="margin-top: 2px; margin-bottom: 0; padding: 0.25rem 0.75rem; border-left: 3px solid #444; font-size: 0.9rem; line-height: 1.5;">'
+                    f"{html_content}"
+                    f"</div>"
+                    f"</div>"
                 )
 
                 st.markdown(card_html, unsafe_allow_html=True)
 
-                if reconstruction_error:
+                if reconstruction_error and show_chunk_debug:
                     st.caption(reconstruction_error)
 
-                if show_chunk_debug and 'paragraph_index' in result['metadata']:
-                    st.caption(
-                        f"🔧 Debug: para_idx={result['metadata']['paragraph_index']}, chunk_pos={result['metadata'].get('chunk_position')}")
+                if show_chunk_debug:
+                    st.json(result["metadata"])
 
                 st.markdown("---")
-
-            st.caption(f"💡 {len(filtered_results)} of {collection.count()} chunks shown")
         else:
-            st.warning(f"No chunks found with distance ≤ {distance_threshold}.")
+            st.warning(f"No chunks found with distance ≤ {distance_threshold}. Try increasing the Max Distance.")
 
     else:
-        # Example Queries
+        # Landing Page Examples
         st.markdown("**💭 Example Queries:**")
         examples = [
             "energy body meditation",
             "what is the first jhana?",
             "differences between jhanas",
             "metta practice",
-            "cessation of perception"
+            "cessation of perception",
         ]
 
         cols = st.columns(3)
