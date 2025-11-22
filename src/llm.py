@@ -22,7 +22,6 @@ class OllamaClient:
         Streams an answer from the LLM based on the user query and retrieved context.
         """
 
-        # Simpler, more robust system prompt using numeric IDs
         system_prompt = (
             "You are an expert teaching assistant for Rob Burbea's dharma talks. "
             "Answer the user's question using ONLY the provided Reference Material. "
@@ -30,6 +29,7 @@ class OllamaClient:
             "### INSTRUCTIONS ###\n"
             "1. **Citations**: Every claim must be supported by a citation.\n"
             "2. **Format**: Use the Reference ID provided in the header, e.g., **[1]** or **[2]**.\n"
+            "   - **NO RANGES**: Do NOT use [1-3]. Use [1], [2], [3].\n"
             "   - Do NOT include filenames or paragraph numbers in the answer.\n"
             "   - Just use the bracketed number.\n"
             "3. **Persona**: Speak naturally."

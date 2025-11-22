@@ -39,7 +39,12 @@ def main():
     st.markdown("""
         <style>
         .stChatMessage { padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
-        strong { color: #4A90E2; }
+
+        /* Styling for the **[1]** citations */
+        div[data-testid="stMarkdownContainer"] strong {
+            color: #FFD700 !important; /* Gold/Amber */
+            font-weight: 900 !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -86,22 +91,22 @@ def main():
                         ref_id_int = int(ref_id)  # Ensure int key
                         if ref_id_int in refs_map:
                             meta = refs_map[ref_id_int]['metadata']
-                            # We can reconstruct the text fresh from DB to be safe
-                            # Or just use what we have. Let's reconstruct for fancy highlighting if we want later.
-                            # For now, simple display:
-
                             source_name = meta.get('source', 'Unknown').split('/')[-1]
 
-                            with st.expander(f"[{ref_id}] {source_name} (Para {meta.get('paragraph_index')})"):
-                                # Re-fetch for display using our robust DB tools
+                            # FIX: Explicit int() cast to handle string metadata from Chroma
+                            try:
+                                para_idx = int(meta.get('paragraph_index', 0))
+                                human_para = para_idx + 1
+                            except ValueError:
+                                human_para = "?"
+
+                            with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
                                 try:
-                                    # We can pull the text from the context string or just re-fetch
-                                    # Re-fetching is cleaner
                                     reconstruction = reconstruct_paragraph_with_hit(
                                         engine.collection,
                                         source=meta['source'],
-                                        paragraph_index=meta['paragraph_index'],
-                                        hit_chunk_position=meta['chunk_position']
+                                        paragraph_index=para_idx,
+                                        hit_chunk_position=int(meta.get('chunk_position', 0))
                                     )
                                     st.markdown(reconstruction['marked_text'], unsafe_allow_html=True)
                                 except:
@@ -110,11 +115,17 @@ def main():
     # --- INPUT ---
     if not st.session_state.messages:
         st.markdown("### 💡 Try asking:")
-        col1, col2 = st.columns(2)
+        # Use 3 columns for the 3 buttons
+        col1, col2, col3 = st.columns(3)
+
         if col1.button("How do I work with the energy body?"):
             st.session_state.example_input = "How do I work with the energy body?"
+
         if col2.button("What is the role of pīti?"):
             st.session_state.example_input = "What is the role of pīti?"
+
+        if col3.button("Explain the relationship between the energy body and light."):
+            st.session_state.example_input = "Explain the relationship between the energy body and light."
 
     default_input = st.session_state.get("example_input", "")
     if "example_input" in st.session_state:
@@ -156,16 +167,20 @@ def main():
                         meta = references_map[ref_id]['metadata']
                         source_name = meta.get('source', 'Unknown').split('/')[-1]
 
-                        with st.expander(f"[{ref_id}] {source_name} (Para {meta.get('paragraph_index')})"):
-                            # Quick retrieval for immediate feedback
-                            # In a real app we might cache this or parse context_used
-                            # But hitting the local DB is fast (<10ms)
+                        # FIX: Explicit int() cast here too
+                        try:
+                            para_idx = int(meta.get('paragraph_index', 0))
+                            human_para = para_idx + 1
+                        except ValueError:
+                            human_para = "?"
+
+                        with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
                             try:
                                 reconstruction = reconstruct_paragraph_with_hit(
                                     engine.collection,
                                     source=meta['source'],
-                                    paragraph_index=meta['paragraph_index'],
-                                    hit_chunk_position=meta['chunk_position']
+                                    paragraph_index=para_idx,
+                                    hit_chunk_position=int(meta.get('chunk_position', 0))
                                 )
                                 st.markdown(reconstruction['marked_text'], unsafe_allow_html=True)
                             except:
