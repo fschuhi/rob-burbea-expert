@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional
 
 try:
     import tomllib  # Python 3.11+
@@ -74,6 +74,10 @@ class RAG(BaseModel):
     use_langchain_splitter: bool = Field(
         default=False,
         description="Use langchain RecursiveCharacterTextSplitter (slower, battle-tested) vs manual splitter (fast).",
+    )
+    # --- NEW FIELD ---
+    rerank_depth_multiplier: int = Field(
+        default=5, description="Multiplier for the initial retrieval pool (top_k * multiplier) before reranking."
     )
 
 
@@ -222,6 +226,8 @@ def _build_env_from_data(data: Mapping[str, Any], profile: Optional[str]) -> Env
         "top_k_results": ("rag", "top_k_results"),
         "similarity_threshold": ("rag", "similarity_threshold"),
         "use_langchain_splitter": ("rag", "use_langchain_splitter"),
+        # --- NEW MAP ---
+        "rerank_depth_multiplier": ("rag", "rerank_depth_multiplier"),
         "base_url": ("ollama", "base_url"),
         "timeout": ("ollama", "timeout"),
         "atomic_writes": ("io", "atomic_writes"),

@@ -60,6 +60,11 @@ def main():
             color: #FFD700 !important;
             font-weight: 900 !important;
         }
+
+        /* Compact info boxes in sidebar */
+        div[data-testid="stAlert"] {
+            padding: 0.5rem 0.75rem;
+        }
         </style>
     """,
         unsafe_allow_html=True,
@@ -81,12 +86,45 @@ def main():
     with st.sidebar:
         st.header("⚙️ Settings")
         st.metric("Database", "Rob Burbea Talks")
-        st.info(f"LLM: `{engine.env.models.default_llm_model}`")
-        st.info(f"Reranker: `Cross-Encoder`")
+
+        st.subheader("Model Stack")
+        # Clean up names for display
+        reranker_name = engine.env.models.reranker_model.replace("cross-encoder/", "")
+        embedder_name = engine.env.models.embedding_model
+        llm_name = engine.env.models.default_llm_model
+
+        st.caption(f"**LLM:** `{llm_name}`")
+        st.caption(f"**Reranker:** `{reranker_name}`")
+        st.caption(f"**Embedder:** `{embedder_name}`")
+
         st.markdown("---")
         st.subheader("Tuning")
-        top_k = st.slider("Max Context Chunks", 1, 20, engine.env.rag.top_k_results)
-        dist_threshold = st.slider("Max Distance", 0.0, 2.0, engine.env.rag.similarity_threshold, 0.05)
+
+        top_k = st.slider(
+            "Final Context Chunks",
+            min_value=1,
+            max_value=15,
+            value=engine.env.rag.top_k_results,
+            help="How many chunks are actually sent to the LLM.",
+        )
+
+        rerank_mult = st.slider(
+            "Rerank Scan Depth (x)",
+            min_value=1,
+            max_value=10,
+            value=engine.env.rag.rerank_depth_multiplier,
+            help=f"Retrieves {top_k} × (this value) candidates from DB, then selects the best {top_k}.",
+        )
+
+        dist_threshold = st.slider(
+            "Max Distance (Pre-filter)",
+            min_value=0.0,
+            max_value=2.0,
+            value=engine.env.rag.similarity_threshold,
+            step=0.05,
+            help="Initial cutoff before reranking. Higher = More candidates allowed.",
+        )
+
         st.markdown("---")
         if st.button("Clear Chat"):
             st.session_state.messages = []
@@ -158,7 +196,6 @@ def main():
 
         with st.chat_message("assistant"):
 
-            # 1. Create Layout Containers
             status_box = st.empty()
             answer_placeholder = st.empty()
 
@@ -168,23 +205,24 @@ def main():
             stream = None
 
             # --- PHASE 1: RETRIEVAL & SETUP ---
-            # We keep the status_box active until the first token arrives
             with status_box.status("🧠 Thinking...", expanded=True) as status:
                 try:
-                    # Step 1: Retrieval
-                    st.write("🔍 Searching knowledge base...")
+                    # Step 1: Retrieval with variable depth
+                    # Calculate total candidates for UI feedback
+                    total_candidates = top_k * rerank_mult
+                    st.write(f"🔍 Scanning {total_candidates} candidates...")
+
                     context_str, references_map = engine.retrieve_and_rerank(
-                        final_prompt, top_k=top_k, distance_threshold=dist_threshold
+                        final_prompt,
+                        top_k=top_k,
+                        distance_threshold=dist_threshold,
+                        rerank_depth_multiplier=rerank_mult,  # Pass the new slider value
                     )
 
-                    st.write("⚖️ Reranking candidates...")
-
-                    # Step 2: Initialize Generation
+                    st.write("⚖️ Reranking complete...")
                     st.write("✍️ Connecting to LLM...")
                     stream = engine.llm_client.stream_answer(query=final_prompt, context=context_str)
 
-                    # Update status to indicate we are now waiting for the model
-                    # This message stays visible during the 'latency gap'
                     status.update(label="✍️ Generating answer...", state="running", expanded=True)
 
                 except Exception as e:
@@ -195,12 +233,7 @@ def main():
             # --- PHASE 2: WAIT FOR FIRST TOKEN ---
             if stream:
                 try:
-                    # Blocking Call: This is where the latency happens.
-                    # The status box (saying "Generating answer...") is still visible here.
                     first_chunk = next(stream)
-
-                    # --- PHASE 3: CLEAR STATUS & STREAM ---
-                    # Now that we have the first word, we wipe the status box.
                     status_box.empty()
 
                     full_response += first_chunk
@@ -246,7 +279,6 @@ def main():
                                 st.warning(f"⚠️ Reference [{ref_id}] cited but not found.")
 
                 except StopIteration:
-                    # Handle case where LLM returns nothing immediately
                     status_box.empty()
                     answer_placeholder.markdown("No response generated.")
 

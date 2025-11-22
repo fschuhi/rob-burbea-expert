@@ -33,6 +33,7 @@ tests/test_env.py
 tests/test_indexing.py
 tests/test_llm.py
 tests/test_models.py
+tests/test_reranker.py
 tests/test_retrieval
 
 tests/fixtures/test_env.toml

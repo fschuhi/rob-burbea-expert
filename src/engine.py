@@ -38,11 +38,15 @@ class RAGEngine:
         self.llm_client = OllamaClient(env)
 
     def retrieve_and_rerank(
-        self, query_text: str, top_k: Optional[int] = None, distance_threshold: Optional[float] = None
+        self,
+        query_text: str,
+        top_k: Optional[int] = None,
+        distance_threshold: Optional[float] = None,
+        rerank_depth_multiplier: int = 5,
     ) -> Tuple[str, Dict[int, Any]]:
         """
         Performs the full retrieval pipeline:
-        1. Retrieve top_k * 5 candidates from ChromaDB.
+        1. Retrieve (top_k * depth_multiplier) candidates from ChromaDB.
         2. Filter by initial distance threshold.
         3. Score (Query, Document) pairs using CrossEncoder.
         4. Sort by Score and take top_k.
@@ -56,8 +60,8 @@ class RAGEngine:
         final_threshold = distance_threshold if distance_threshold is not None else self.env.rag.similarity_threshold
 
         # --- Step 1: Broad Vector Search ---
-        # We fetch 5x the candidates to give the reranker enough options to fix ranking errors
-        initial_k = final_top_k * 5
+        # Fetch N * Multiplier candidates to give the reranker a pool to work with
+        initial_k = final_top_k * rerank_depth_multiplier
 
         results = self.collection.query(query_texts=[query_text], n_results=initial_k)
 
