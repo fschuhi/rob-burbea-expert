@@ -26,7 +26,7 @@ I frequently switch between different AI models (Gemini, Claude, ChatGPT).
 **Assume I am starting a fresh session with you right now.**
 
 1.  **Source of Truth**: The "filesdump" (a concatenated text file of the project) I provide is the absolute source of truth. Do not rely on training data about how *similar* projects work. Rely on *my* code.
-2.  **Parsing the Filesdump**: The project context is provided as a single XML-formatted block, what I sometimes call a "filesdump"". Files are wrapped in ``<document path="path/to/file">`` tags. You must parse this structure to understand the filesystem.
+2.  **Parsing the Filesdump**: The project context is provided as a single XML-formatted block. Files are wrapped in `<document path="path/to/file">` tags. You must parse this structure to understand the filesystem.
 3.  **Makefile Awareness**: Always check the `Makefile` (if provided) to understand the current build, test, and run commands. Use these targets in your instructions.
 
 ## Memory and Conversation Boundaries
@@ -40,23 +40,18 @@ For this project, I require strict conversation compartmentalization:
 3.  **No unprompted callbacks**: Never reference past conversations, past decisions, or shared history unless I specifically ask you to.
 4.  **Self-contained context**: If something seems unclear or contradictory in my materials, ask me directly rather than filling gaps with memory.
 
-## Code Output Standards
+## Code & Text Output Standards
 
 **Rule 1: Default to Drop-in Replacements**
-When you provide code, provide the **entire file content** so I can copy-paste it directly (`Ctrl+A`, `Ctrl+V`). Do not use `...` placeholders for existing code unless the file is massive (e.g., > 500 lines) and the context is obvious.
+When you provide code OR text files, provide the **entire file content** so I can copy-paste it directly (`Ctrl+A`, `Ctrl+V`). Do not use `...` placeholders for existing code unless the file is massive (e.g., > 500 lines) and the context is obvious.
 
 **Rule 2: Strict Patching Protocol**
 If the change is trivial (e.g., 1-2 lines) and you decide *not* to provide the full file, you must:
-1.  Precede the code block with: `⚠️ PARTIAL PATCH - NOT A DROP-IN REPLACEMENT`.
+1.  Precede the code/text block with: `⚠️ PARTIAL PATCH - NOT A DROP-IN REPLACEMENT`.
 2.  Provide clear instructions on exactly *where* to insert the code (e.g., "Replace the `def main():` function with this:" or "Add this import at the top:").
 
 **Rule 3: Dependency Policy**
 Do not reinvent the wheel. I prefer using established, well-maintained external libraries over writing complex custom logic (e.g., use `pandas`, `requests`, `ollama` lib). If a standard library exists, suggest adding it to `requirements.txt`.
-
-## Markdown Output Convention
-
-When I request markdown, wrap the entire response once inside a single set of triple backticks.
-Inside that block, replace every other triple-backtick fence with ''' (three single quotes) so the frontend doesn’t prematurely close the block, and explicitly remind me that I’ll convert those ''' back to ``` after pasting.
 
 ## Coding Standards
 
@@ -65,6 +60,11 @@ Inside that block, replace every other triple-backtick fence with ''' (three sin
     * If the code passes the tests, it is "correct," even if it looks unconventional.
     * Never refactor code in a way that breaks existing tests without explicit permission.
     * When writing new logic, ensure it passes the existing test suite before marking it as complete.
+
+## Markdown Output Convention
+
+When I request markdown, wrap the entire response once inside a single set of triple backticks.
+Inside that block, replace every other triple-backtick fence with ''' (three single quotes) so the frontend doesn’t prematurely close the block, and explicitly remind me that I’ll convert those ''' back to ``` after pasting.
 
 ## Workflow Pattern
 

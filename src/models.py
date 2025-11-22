@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# noinspection PyUnresolvedReferences
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
 try:
@@ -20,6 +21,7 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction):
             raise ImportError("sentence-transformers is not installed.")
         self.model = SentenceTransformer(model_name)
 
+    # noinspection PyShadowingBuiltins
     def __call__(self, input: Documents) -> Embeddings:  # type: ignore[override]
         embeddings = self.model.encode(input)
         return embeddings.tolist() if hasattr(embeddings, "tolist") else embeddings
@@ -35,19 +37,24 @@ class FakeEmbeddingFunction:
 
     _VECTOR = [0.1, 0.2, 0.3]
 
-    def name(self) -> str:
+    @staticmethod
+    def name() -> str:
         """Mirror the naming hook Chroma’s validation checks for."""
         return "mock"
 
+    # noinspection PyShadowingBuiltins
     def __call__(self, input: Documents) -> Embeddings:
+        # type: ignore
         return [self._VECTOR.copy() for _ in input]
 
+    # noinspection PyShadowingBuiltins
     def embed_query(self, input: Documents) -> Embeddings:
         """
         Alias for __call__ to satisfy Chroma/LangChain interfaces during query.
         """
         return self(input)
 
+    # noinspection PyShadowingBuiltins
     def embed_documents(self, input: Documents) -> Embeddings:
         """
         Alias for __call__ to satisfy Chroma/LangChain interfaces during indexing.
