@@ -33,9 +33,20 @@ def engine(test_env, populated_collection, mock_llm_client):
     - Real (Populated) Database Collection
     - Fake Embedding Function (injected)
     - Mocked LLM Client
+    - Mocked CrossEncoder (to avoid model download in unit tests)
     """
-    with patch("src.engine.get_embedding_function") as mock_get_ef:
+    with patch("src.engine.get_embedding_function") as mock_get_ef, patch(
+        "src.engine.CrossEncoder"
+    ) as MockCrossEncoder:
+
+        # 1. Mock the Bi-Encoder
         mock_get_ef.return_value = FakeEmbeddingFunction()
+
+        # 2. Mock the Cross-Encoder
+        # We just need it to return a list of dummy scores (floats)
+        mock_ce_instance = MockCrossEncoder.return_value
+        # predict() receives a list of pairs, returns a list of scores
+        mock_ce_instance.predict.side_effect = lambda pairs: [0.99] * len(pairs)
 
         engine = RAGEngine(test_env)
         engine.collection = populated_collection
@@ -53,14 +64,16 @@ def test_engine_initialization(engine, test_env):
     assert engine.collection is not None
     assert engine.context_builder is not None
     assert engine.llm_client is not None
+    assert engine.cross_encoder is not None
 
 
 def test_answer_query_flow(engine, mock_llm_client):
     """
     Tests the full pipeline:
     1. Search (using FakeEmbeddingFunction on populated_collection)
-    2. Context Build (using real ContextBuilder logic)
-    3. Generation (using Mock LLM)
+    2. Rerank (Mocked)
+    3. Context Build (using real ContextBuilder logic)
+    4. Generation (using Mock LLM)
     """
     query = "test query"
 
@@ -96,4 +109,7 @@ def test_answer_query_with_overrides(engine, mock_llm_client):
         engine.answer_query("test", top_k=10, distance_threshold=0.9)
 
         mock_query.assert_called_once()
-        assert mock_query.call_args.kwargs["n_results"] == 10
+
+        # FIX: The engine now fetches 5x the top_k to create a pool for the reranker
+        # So if top_k=10, we expect n_results=50
+        assert mock_query.call_args.kwargs["n_results"] == 50

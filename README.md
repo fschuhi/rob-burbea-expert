@@ -19,18 +19,25 @@ _Current pilot scope: 32 talks from the 2019-2020 "Practising the Jhānas" retre
 
 ## Architecture Overview
 
-```
-User Query ──► Embedding ──► ChromaDB Retrieval ──► Context Builder ──► Ollama LLM ──► Response
+We use a **Two-Stage Retrieval** pipeline to balance speed (High Recall) with accuracy (High Precision).
+
+```mermaid
+graph LR
+    Q[User Query] --> B[Bi-Encoder]
+    B -->|Top K * N| C[ChromaDB Retrieval]
+    C -->|Candidates| R[Cross-Encoder Reranker]
+    R -->|Top K| CB[Context Builder]
+    CB --> L[Ollama LLM]
+    L --> Ans[Answer]
 ```
 
-| Component                  | Role                                                                 |
-|----------------------------|----------------------------------------------------------------------|
-| **sentence-transformers** | Produces embeddings locally (MiniLM by default)                      |
-| **ChromaDB** | Vector store with deterministic metadata + ID handling               |
-| **Context Builder** | Assembles paragraphs and maps them to Reference IDs `[1]`, `[2]`     |
-| **Ollama** | Runs local LLMs (tested: `dolphin-mistral`, `gemma3n-abliterated`)   |
-| **Search Explorer** | Streamlit app for deep semantic search and exploration               |
-| **Answer Generator** | Chat interface for Q&A with strictly cited evidence                  |
+| Component | Role |
+|---|---|
+| **Bi-Encoder** | Fast vector search (MiniLM) to find ~25 broad candidates. |
+| **ChromaDB** | Vector store with deterministic metadata + ID handling. |
+| **Reranker** | **Cross-Encoder** (MS MARCO) that deeply scores candidates to fix ranking errors. |
+| **Context Builder** | Assembles paragraphs and maps them to Reference IDs `[1]`, `[2]`. |
+| **Ollama** | Runs local LLMs (tested: `dolphin-mistral`, `gemma3n-abliterated`). |
 
 ---
 
@@ -58,25 +65,22 @@ pip install -e .
 Reference template: `tests/fixtures/test_env.toml`.
 
 ```toml
-[paths]
-data_dir = "data"
-raw_talks_dir = "data/raw_talks"
-chroma_db_dir = "data/chroma_db"
-metadata_path = "data/raw_talks/metadata.json"
-
 [models]
+# Fast retrieval model
 embedding_model = "all-MiniLM-L6-v2"
+# Precision reranking model
+reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 default_llm_model = "dolphin-mistral:7b"
 
 [rag]
 chunk_size = 500
 chunk_overlap = 50
+# Number of chunks to send to the LLM
 top_k_results = 5
-similarity_threshold = 0.7
-
-[ollama]
-base_url = "http://localhost:11434"
-timeout = 60
+# How many candidates to fetch for the Reranker (multiplier * top_k)
+rerank_depth_multiplier = 5
+# Initial similarity filter (0.0 to 2.0)
+similarity_threshold = 0.75
 ```
 
 ---
@@ -96,74 +100,34 @@ make test-fast      # Skip slow indexing tests
 make app            # Launch Search Explorer (Port 8501)
 make chat           # Launch Answer Generator (Port 8502)
 
-# Application (Background - Daemon Mode)
-make startapp       # Start Search Explorer in background
-make killapp        # Stop Search Explorer
-make startchat      # Start Answer Generator in background
-make killchat       # Stop Answer Generator
-
 # Data Management
 make ingest-pilot   # Copy pilot data to data/ and index it (PRODUCTION DB)
 make index          # Index pilot data to tmp/ (TEST DB only)
 
-# Ollama Management
-make startollama    # Safely start Ollama in the background
-make killollama     # Stop the running Ollama process
-
 # Utilities
 make clean          # Remove venv, caches, and tmp databases
 make showtree       # Display project structure
-make gentree        # Save project tree to project-tree.txt
-```
-
----
-
-## Project Structure
-
-```
-rob-burbea-expert/
-├── src/
-│   ├── engine.py       # RAG Orchestrator (RAGEngine)
-│   ├── context.py      # Context assembly & ID mapping
-│   ├── llm.py          # Ollama API Client & Prompt Engineering
-│   ├── data_prep.py    # Text ingestion + chunking
-│   ├── database.py     # ChromaDB connector + paragraph reconstruction
-│   ├── env.py          # Config loading (TOML)
-│   ├── indexing.py     # Full indexing pipeline
-│   └── models.py       # Embedding factory (real + fake)
-├── apps/
-│   ├── answer_generator.py # Chat interface with footnote citations
-│   └── search_explorer.py  # Search interface with green highlighting
-├── tests/
-│   ├── conftest.py         # Shared fixtures (real DB integration)
-│   ├── test_engine.py      # Integration tests
-│   └── ... (unit tests for all modules)
-├── data/                   # Runtime artifacts (gitignored)
-└── tools/                  # Utility scripts
+make filesdump      # Create context dump for LLMs
 ```
 
 ---
 
 ## Current Status
 
-| Feature                                   | Status |
-|-------------------------------------------|--------|
-| Project scaffolding & config              | ✅     |
-| Semantic-first splitter + LangChain check | ✅     |
-| Paragraph metadata tracking               | ✅     |
-| ChromaDB indexing with deterministic IDs  | ✅     |
-| RAG retrieval validation & testing        | ✅     |
-| Search Explorer Streamlit app             | ✅     |
-| Paragraph reconstruction with highlighting| ✅     |
-| Context building & ID Mapping             | ✅     |
-| Ollama LLM integration                    | ✅     |
-| Answer Generator Streamlit app            | ✅     |
-| Footnote-style Citations                  | ✅     |
-| CLI interface                             | ⬜     |
+| Feature | Status |
+|---|---|
+| Project scaffolding & config | ✅ |
+| Semantic-first splitter | ✅ |
+| ChromaDB indexing | ✅ |
+| **Cross-Encoder Reranking** | ✅ |
+| Search Explorer App | ✅ |
+| Answer Generator App | ✅ |
+| **Granular UI Feedback** | ✅ |
+| Footnote Citations | ✅ |
 
 **All 43 tests passing** ✅
 
-**Legend:** ✅ Complete | 🚧 In Progress | ⬜ Planned
+> **Note:** For the future roadmap and planned features, please refer to [`TODO.lst`](TODO.lst).
 
 ---
 
@@ -177,30 +141,8 @@ make chat
 ```
 
 **Features:**
-- **Conversational Interface**: Ask natural language questions.
+- **Reranker-Powered**: Distinguishes subtle concepts (e.g., "First Jhana" vs. "Third Jhana").
 - **Live Streaming**: Watch the answer type out in real-time.
-- **Footnote Citations**: Claims are cited with `[1]`, `[2]` markers.
-- **Interactive References**: Expandable reference list at the bottom showing the source text for every citation.
-- **Model-Agnostic**: Uses whichever model is configured in `rb_expert.toml`.
-- **Live Tuning**: Adjust `Top K` and `Distance Threshold` in the sidebar.
-
----
-
-## Key Implementation Details
-
-### Reference ID Mapping
-To prevent LLM hallucinations of long filenames, the system uses an ID mapping layer:
-1.  **Retrieval**: Engine gets Top-K chunks.
-2.  **Mapping**: `ContextBuilder` assigns integer IDs (`[1]`, `[2]`) to chunks.
-3.  **Prompting**: LLM is instructed to cite using *only* the integer ID.
-4.  **Resolution**: The UI maps `[1]` back to the full filename and text for display.
-
-### Paragraph Reconstruction
-1.  **UI Layer (`database.py`)**: Reconstructs full paragraphs for the Streamlit app, highlighting the specific chunk that triggered the search hit.
-2.  **LLM Layer (`context.py`)**: Assembles retrieval results into a structured system prompt with distinct headers for each source.
-
----
-
-## Notes
-
-This is a private, local-only system: all processing happens on-device with no external API calls.
+- **Granular Status**: See exactly what the engine is doing ("Scanning...", "Reranking...", "Generating...").
+- **Interactive References**: Expandable reference list at the bottom showing source text.
+- **Live Tuning**: Adjust `Top K` and `Scan Depth` directly in the sidebar.

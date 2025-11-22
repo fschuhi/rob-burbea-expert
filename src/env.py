@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional
 
 try:
     import tomllib  # Python 3.11+
@@ -24,13 +24,12 @@ class Paths(BaseModel):
     Filesystem locations used by the Rob Burbea Expert RAG tool.
     """
 
-    data_dir: Path = Field(...,
-                           description="Root directory for all project data (e.g., 'data' or 'tests/fixtures/data').")
+    data_dir: Path = Field(
+        ..., description="Root directory for all project data (e.g., 'data' or 'tests/fixtures/data')."
+    )
     raw_talks_dir: Path = Field(..., description="Directory containing the raw Markdown talk transcripts.")
     chroma_db_dir: Path = Field(..., description="Directory where the ChromaDB vector store will be persisted.")
     metadata_path: Path = Field(..., description="Path to the JSON/CSV/Excel file containing talk metadata.")
-
-    # Removed: notes_root, pdf_dirs, backup_dir, temp_dir from old Env
 
     @field_validator("*", mode="before")
     @classmethod
@@ -42,9 +41,14 @@ class Models(BaseModel):
     """
     Configuration for the Embedding and LLM models.
     """
+
     embedding_model: str = Field(
         default="all-MiniLM-L6-v2",
         description="Name of the sentence-transformers model for embeddings.",
+    )
+    reranker_model: str = Field(
+        default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        description="HuggingFace model ID for the CrossEncoder reranker.",
     )
     default_llm_model: str = Field(
         default="dolphin-mistral:7b",
@@ -60,6 +64,7 @@ class RAG(BaseModel):
     """
     Settings related to the Retrieval Augmented Generation (RAG) process.
     """
+
     chunk_size: int = Field(default=500, description="Size of text chunks (in characters) for splitting documents.")
     chunk_overlap: int = Field(default=50, description="Overlap between consecutive chunks.")
     top_k_results: int = Field(default=5, description="Number of context documents to retrieve from ChromaDB.")
@@ -68,7 +73,11 @@ class RAG(BaseModel):
     )
     use_langchain_splitter: bool = Field(
         default=False,
-        description="Use langchain RecursiveCharacterTextSplitter (slower, battle-tested) vs manual splitter (fast)."
+        description="Use langchain RecursiveCharacterTextSplitter (slower, battle-tested) vs manual splitter (fast).",
+    )
+    # --- NEW FIELD ---
+    rerank_depth_multiplier: int = Field(
+        default=5, description="Multiplier for the initial retrieval pool (top_k * multiplier) before reranking."
     )
 
 
@@ -76,6 +85,7 @@ class Ollama(BaseModel):
     """
     Configuration for the local Ollama LLM server.
     """
+
     base_url: str = Field(default="http://localhost:11434", description="The base URL for the Ollama server.")
     timeout: int = Field(default=60, description="Request timeout in seconds.")
 
@@ -84,6 +94,7 @@ class IO(BaseModel):
     """
     I/O behavior flags.
     """
+
     atomic_writes: bool = Field(default=True, description="Write files atomically where possible.")
     create_missing_dirs: bool = Field(
         default=True, description="Create configured directories if they do not exist (e.g., chroma_db_dir)."
@@ -94,6 +105,7 @@ class CLI(BaseModel):
     """
     CLI-related defaults.
     """
+
     default_env: Optional[str] = Field(
         default=None,
         description="Optional profile name; useful if you add multiple env profiles later.",
@@ -104,13 +116,13 @@ class Env(BaseModel):
     """
     Top-level configuration object for the Rob Burbea Expert RAG system.
     """
+
     paths: Paths
     models: Models = Field(default_factory=Models)
     rag: RAG = Field(default_factory=RAG)
     ollama: Ollama = Field(default_factory=Ollama)
     io: IO = Field(default_factory=IO)
     cli: CLI = Field(default_factory=CLI)
-    # Removed: frontmatter, annotations
 
     model_config = {"frozen": True}  # make it effectively immutable after creation
 
@@ -121,40 +133,27 @@ class Env(BaseModel):
             if self.io.create_missing_dirs:
                 self.paths.chroma_db_dir.mkdir(parents=True, exist_ok=True)
             else:
-                raise ValueError(
-                    f"chroma_db_dir does not exist: {self.paths.chroma_db_dir}"
-                )
+                raise ValueError(f"chroma_db_dir does not exist: {self.paths.chroma_db_dir}")
 
         # 2. Ensure raw_talks_dir exists
         if not self.paths.raw_talks_dir.exists() or not self.paths.raw_talks_dir.is_dir():
-            raise ValueError(
-                f"raw_talks_dir not found or not a directory: {self.paths.raw_talks_dir}"
-            )
+            raise ValueError(f"raw_talks_dir not found or not a directory: {self.paths.raw_talks_dir}")
 
         # 3. Ensure metadata_path exists
         if not self.paths.metadata_path.exists() or not self.paths.metadata_path.is_file():
-            raise ValueError(
-                f"metadata_path not found or not a file: {self.paths.metadata_path}"
-            )
+            raise ValueError(f"metadata_path not found or not a file: {self.paths.metadata_path}")
 
         return self
 
 
 def load_env(
-        source: Optional[Path | str | Mapping[str, Any]] = None,
-        profile: Optional[str] = None,
-        # --- CHANGE: Updated env_var and default_filenames for this project ---
-        env_var: str = "RB_EXPERT_ENV_PATH",
-        default_filenames: tuple[str, ...] = ("rb_expert.toml", "rob-burbea-expert.toml"),
+    source: Optional[Path | str | Mapping[str, Any]] = None,
+    profile: Optional[str] = None,
+    env_var: str = "RB_EXPERT_ENV_PATH",
+    default_filenames: tuple[str, ...] = ("rb_expert.toml", "rob-burbea-expert.toml"),
 ) -> Env:
     """
     Load an Env from a TOML file, a mapping, or defaults.
-
-    Resolution order:
-      1) Mapping passed directly.
-      2) Explicit path passed in.
-      3) Path from RB_EXPERT_ENV_PATH env var.
-      4) First existing file among default_filenames in CWD.
     """
     if isinstance(source, Mapping):
         data = _mapping_to_data(source)
@@ -177,7 +176,6 @@ def load_env(
                     break
 
     if path is None:
-        # --- CHANGE: Updated message ---
         raise FileNotFoundError(
             "No configuration source found. Provide a mapping, set RB_EXPERT_ENV_PATH, "
             f"or create one of {default_filenames} in the current directory."
@@ -207,7 +205,6 @@ def _build_env_from_data(data: Mapping[str, Any], profile: Optional[str]) -> Env
         "ollama": {},
         "io": {},
         "cli": {},
-        # Removed: frontmatter, annotations
     }
 
     # Copy grouped keys if present
@@ -215,25 +212,24 @@ def _build_env_from_data(data: Mapping[str, Any], profile: Optional[str]) -> Env
         if isinstance(data.get(section), Mapping):
             grouped[section] = dict(data[section])
 
-    # Allow flat keys too (simplified for the new project, focusing on core RAG needs)
+    # Allow flat keys too
     flat_to_group = {
         "data_dir": ("paths", "data_dir"),
         "raw_talks_dir": ("paths", "raw_talks_dir"),
         "chroma_db_dir": ("paths", "chroma_db_dir"),
         "metadata_path": ("paths", "metadata_path"),
-
         "embedding_model": ("models", "embedding_model"),
+        "reranker_model": ("models", "reranker_model"),
         "default_llm_model": ("models", "default_llm_model"),
-
         "chunk_size": ("rag", "chunk_size"),
         "chunk_overlap": ("rag", "chunk_overlap"),
         "top_k_results": ("rag", "top_k_results"),
         "similarity_threshold": ("rag", "similarity_threshold"),
         "use_langchain_splitter": ("rag", "use_langchain_splitter"),
-
+        # --- NEW MAP ---
+        "rerank_depth_multiplier": ("rag", "rerank_depth_multiplier"),
         "base_url": ("ollama", "base_url"),
         "timeout": ("ollama", "timeout"),
-
         "atomic_writes": ("io", "atomic_writes"),
         "create_missing_dirs": ("io", "create_missing_dirs"),
         "default_env": ("cli", "default_env"),
