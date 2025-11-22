@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# noinspection PyUnresolvedReferences
+# noinspection PyUnresolvedReferences,PyProtectedMember
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
 try:
@@ -42,10 +42,11 @@ class FakeEmbeddingFunction:
         """Mirror the naming hook Chroma’s validation checks for."""
         return "mock"
 
-    # noinspection PyShadowingBuiltins
+    # noinspection PyShadowingBuiltins,PyTypeChecker
     def __call__(self, input: Documents) -> Embeddings:
-        # type: ignore
-        return [self._VECTOR.copy() for _ in input]
+        # We return a list of lists, but the type hint expects list of ndarrays.
+        # This is fine for testing, so we suppress the PyCharm type check.
+        return [self._VECTOR.copy() for _ in input]  # type: ignore
 
     # noinspection PyShadowingBuiltins
     def embed_query(self, input: Documents) -> Embeddings:
