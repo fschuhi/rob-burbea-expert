@@ -127,7 +127,7 @@ make filesdump      # Create context dump for LLMs
 
 **All 43 tests passing** ✅
 
-> **Note:** For the future roadmap and planned features, please refer to [`TODO.lst`](TODO.md).
+> **Note:** For the future roadmap and planned features, please refer to [`TODO.md`](TODO.md).
 
 ---
 
@@ -143,6 +143,6 @@ make chat
 **Features:**
 - **Reranker-Powered**: Distinguishes subtle concepts (e.g., "First Jhana" vs. "Third Jhana").
 - **Live Streaming**: Watch the answer type out in real-time.
-- **Granular Status**: See exactly what the engine is doing ("Scanning...", "Reranking...", "Generating...").
+- **Granular Status**: See exactly what the engine is doing ("Retrieval...", "First Token...").
 - **Interactive References**: Expandable reference list at the bottom showing source text.
 - **Live Tuning**: Adjust `Top K` and `Scan Depth` directly in the sidebar.
