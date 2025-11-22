@@ -7,7 +7,6 @@ Usage:
 
 import streamlit as st
 import re
-import time
 from src.env import load_env
 from src.engine import RAGEngine
 from src.database import reconstruct_paragraph_with_hit
@@ -55,9 +54,10 @@ def main():
         """
         <style>
         .stChatMessage { padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
-        /* Styling for the **[1]** citations */
-        div[data-testid="stMarkdownContainer"] strong {
-            color: #FFD700 !important; 
+
+        /* Styling for the **[1]** citations - Global Strong Override */
+        strong {
+            color: #FFD700 !important;
             font-weight: 900 !important;
         }
         </style>
@@ -81,7 +81,8 @@ def main():
     with st.sidebar:
         st.header("⚙️ Settings")
         st.metric("Database", "Rob Burbea Talks")
-        st.info(f"Model: `{engine.env.models.default_llm_model}`")
+        st.info(f"LLM: `{engine.env.models.default_llm_model}`")
+        st.info(f"Reranker: `Cross-Encoder`")
         st.markdown("---")
         st.subheader("Tuning")
         top_k = st.slider("Max Context Chunks", 1, 20, engine.env.rag.top_k_results)
@@ -105,21 +106,18 @@ def main():
                     st.markdown("---")
                     st.caption("📚 References:")
                     for ref_id in citation_ids:
-                        # Handle integer keys from JSON serialization
                         ref_id = int(ref_id)
-
                         if ref_id in refs_map:
                             meta = refs_map[ref_id]["metadata"]
                             source_name = meta.get("source", "Unknown").split("/")[-1]
 
-                            # FIX: Robust int casting for History Render
+                            # FIX: Keep raw strings for DB lookup, use int only for Display
+                            para_str = meta.get("paragraph_index", "0")
+                            chunk_str = meta.get("chunk_position", "0")
+
                             try:
-                                para_idx = int(meta.get("paragraph_index", 0))
-                                chunk_pos = int(meta.get("chunk_position", 0))
-                                human_para = para_idx + 1
+                                human_para = int(para_str) + 1
                             except ValueError:
-                                para_idx = 0
-                                chunk_pos = 0
                                 human_para = "?"
 
                             with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
@@ -127,14 +125,14 @@ def main():
                                     reconstruction = reconstruct_paragraph_with_hit(
                                         engine.collection,
                                         source=meta["source"],
-                                        paragraph_index=para_idx,
-                                        hit_chunk_position=chunk_pos,
+                                        paragraph_index=para_str,
+                                        hit_chunk_position=chunk_str,
                                     )
                                     st.markdown(reconstruction["marked_text"], unsafe_allow_html=True)
-                                except:
-                                    st.caption("Error retrieving paragraph text.")
+                                except Exception as e:
+                                    st.caption(f"Error retrieving text: {e}")
                         else:
-                            st.warning(f"⚠️ Reference [{ref_id}] was cited but not found in context.")
+                            st.warning(f"⚠️ Reference [{ref_id}] cited but not found.")
 
     # --- INPUT ---
     if not st.session_state.messages:
@@ -144,7 +142,7 @@ def main():
             st.session_state.example_input = "How do I work with the energy body?"
         if col2.button("What is the role of pīti?"):
             st.session_state.example_input = "What is the role of pīti?"
-        if col3.button("Energy body & light?"):
+        if col3.button("Explain the relationship between the energy body and light."):
             st.session_state.example_input = "Explain the relationship between the energy body and light."
 
     default_input = st.session_state.get("example_input", "")
@@ -159,64 +157,98 @@ def main():
         st.session_state.messages.append({"role": "user", "content": final_prompt})
 
         with st.chat_message("assistant"):
-            placeholder = st.empty()
+
+            # 1. Create Layout Containers
+            status_box = st.empty()
+            answer_placeholder = st.empty()
+
             full_response = ""
             references_map = {}
             used_ids = []
+            stream = None
 
-            try:
-                # 1. LATENCY FEEDBACK
-                with st.spinner("Thinking..."):
-                    # Engine returns (context_str, iterator, references_dict)
-                    context_used, stream, references_map = engine.answer_query(
+            # --- PHASE 1: RETRIEVAL & SETUP ---
+            # We keep the status_box active until the first token arrives
+            with status_box.status("🧠 Thinking...", expanded=True) as status:
+                try:
+                    # Step 1: Retrieval
+                    st.write("🔍 Searching knowledge base...")
+                    context_str, references_map = engine.retrieve_and_rerank(
                         final_prompt, top_k=top_k, distance_threshold=dist_threshold
                     )
 
-                # 2. STREAMING
-                for chunk in stream:
-                    full_response += chunk
-                    placeholder.markdown(full_response + "▌")
+                    st.write("⚖️ Reranking candidates...")
 
-                placeholder.markdown(full_response)
+                    # Step 2: Initialize Generation
+                    st.write("✍️ Connecting to LLM...")
+                    stream = engine.llm_client.stream_answer(query=final_prompt, context=context_str)
 
-                # 3. REFERENCE RESOLUTION
-                used_ids = resolve_references(full_response)
+                    # Update status to indicate we are now waiting for the model
+                    # This message stays visible during the 'latency gap'
+                    status.update(label="✍️ Generating answer...", state="running", expanded=True)
 
-                if used_ids:
-                    st.markdown("---")
-                    st.caption("📚 References:")
-                    for ref_id in used_ids:
-                        if ref_id in references_map:
-                            meta = references_map[ref_id]["metadata"]
-                            source_name = meta.get("source", "Unknown").split("/")[-1]
+                except Exception as e:
+                    status.update(label="Error", state="error")
+                    st.error(f"Pipeline failed: {e}")
+                    st.stop()
 
-                            # FIX: Robust int casting for New Generation
-                            try:
-                                para_idx = int(meta.get("paragraph_index", 0))
-                                chunk_pos = int(meta.get("chunk_position", 0))
-                                human_para = para_idx + 1
-                            except ValueError:
-                                para_idx = 0
-                                chunk_pos = 0
-                                human_para = "?"
+            # --- PHASE 2: WAIT FOR FIRST TOKEN ---
+            if stream:
+                try:
+                    # Blocking Call: This is where the latency happens.
+                    # The status box (saying "Generating answer...") is still visible here.
+                    first_chunk = next(stream)
 
-                            with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
+                    # --- PHASE 3: CLEAR STATUS & STREAM ---
+                    # Now that we have the first word, we wipe the status box.
+                    status_box.empty()
+
+                    full_response += first_chunk
+                    answer_placeholder.markdown(full_response + "▌")
+
+                    for chunk in stream:
+                        full_response += chunk
+                        answer_placeholder.markdown(full_response + "▌")
+
+                    answer_placeholder.markdown(full_response)
+
+                    # 4. REFERENCE RESOLUTION
+                    used_ids = resolve_references(full_response)
+
+                    if used_ids:
+                        st.markdown("---")
+                        st.caption("📚 References:")
+                        for ref_id in used_ids:
+                            if ref_id in references_map:
+                                meta = references_map[ref_id]["metadata"]
+                                source_name = meta.get("source", "Unknown").split("/")[-1]
+
+                                para_str = meta.get("paragraph_index", "0")
+                                chunk_str = meta.get("chunk_position", "0")
+
                                 try:
-                                    reconstruction = reconstruct_paragraph_with_hit(
-                                        engine.collection,
-                                        source=meta["source"],
-                                        paragraph_index=para_idx,
-                                        hit_chunk_position=chunk_pos,
-                                    )
-                                    st.markdown(reconstruction["marked_text"], unsafe_allow_html=True)
-                                except:
-                                    st.caption("Text lookup failed.")
-                        else:
-                            st.warning(f"⚠️ Reference [{ref_id}] was cited but not found in context.")
+                                    human_para = int(para_str) + 1
+                                except ValueError:
+                                    human_para = "?"
 
-            except Exception as e:
-                st.error(f"Error: {e}")
-                full_response = "Error generating response."
+                                with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
+                                    try:
+                                        reconstruction = reconstruct_paragraph_with_hit(
+                                            engine.collection,
+                                            source=meta["source"],
+                                            paragraph_index=para_str,
+                                            hit_chunk_position=chunk_str,
+                                        )
+                                        st.markdown(reconstruction["marked_text"], unsafe_allow_html=True)
+                                    except Exception as e:
+                                        st.caption(f"Error retrieving text: {e}")
+                            else:
+                                st.warning(f"⚠️ Reference [{ref_id}] cited but not found.")
+
+                except StopIteration:
+                    # Handle case where LLM returns nothing immediately
+                    status_box.empty()
+                    answer_placeholder.markdown("No response generated.")
 
         st.session_state.messages.append(
             {"role": "assistant", "content": full_response, "references_map": references_map, "citations": used_ids}
