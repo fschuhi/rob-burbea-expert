@@ -1,12 +1,20 @@
 """
 Answer Generator - RAG-based Question Answering with Ollama.
 
+Features:
+- Semantic Search + Reranking
+- Simple "Thinking..." Spinner
+- Telemetry: Vertical "Log Style" List in Expander
+- Cinematic Wide Layout
+- Footnote Citation System
+
 Usage:
     make chat
 """
 
 import streamlit as st
 import re
+import time
 from src.env import load_env
 from src.engine import RAGEngine
 from src.database import reconstruct_paragraph_with_hit
@@ -20,10 +28,7 @@ def get_engine():
 
 
 def resolve_references(text: str) -> list[int]:
-    """
-    Robustly parses citation tags like [1], [1, 2], [8-10] from the text.
-    Returns a list of integer IDs.
-    """
+    """Robustly parses citation tags like [1], [1, 2] from the text."""
     raw_matches = re.findall(r"\[([\d,\s\-]+)\]", text)
     unique_ids = set()
 
@@ -47,24 +52,60 @@ def resolve_references(text: str) -> list[int]:
     return sorted(list(unique_ids))
 
 
-def main():
-    st.set_page_config(page_title="Rob Burbea Expert - AI Chat", page_icon="🧘", layout="centered")
+def render_telemetry_box(container, telemetry: dict, final: bool = False):
+    """
+    Renders the metrics as a clean, vertical log list.
+    """
+    if not telemetry:
+        return
 
+    retrieval = telemetry.get("retrieval", 0.0)
+    ttft = telemetry.get("ttft", 0.0)
+
+    # Dynamic header based on state
+    if final:
+        total_wall = telemetry.get("total_wall", 0.0)
+        header = f"⏱️ Finished in {total_wall:.2f}s"
+    else:
+        header = "⏱️ Processing..."
+
+    # Build the log lines
+    lines = []
+    lines.append(f"**Retrieval & Rerank:** `{retrieval:.2f}s`")
+    lines.append(f"**Time to First Token:** `{ttft:.2f}s`")
+
+    if final:
+        total_gen = telemetry.get("total_gen", 0.0)
+        speed = telemetry.get("speed", 0.0)
+        lines.append(f"**Full Generation:** `{total_gen:.2f}s`")
+        lines.append(f"**Speed:** `{speed:.1f} words/s`")
+
+    # Use double-space + newline for tight markdown line breaks (Log Style)
+    content = "  \n".join(lines)
+
+    with container.expander(header, expanded=False):
+        st.markdown(content)
+
+
+def main():
+    # 1. CINEMATIC VIEW: Use wide layout
+    st.set_page_config(page_title="Rob Burbea Expert - AI Chat", page_icon="🧘", layout="wide")
+
+    # 2. CSS: Constrain the wide layout to a comfortable reading width
     st.markdown(
         """
         <style>
+        /* Center the main block and limit width for readability */
+        .block-container {
+            max-width: 1000px;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            margin: auto;
+        }
         .stChatMessage { padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
 
-        /* Styling for the **[1]** citations - Global Strong Override */
-        strong {
-            color: #FFD700 !important;
-            font-weight: 900 !important;
-        }
-
         /* Compact info boxes in sidebar */
-        div[data-testid="stAlert"] {
-            padding: 0.5rem 0.75rem;
-        }
+        div[data-testid="stAlert"] { padding: 0.5rem 0.75rem; }
         </style>
     """,
         unsafe_allow_html=True,
@@ -88,7 +129,6 @@ def main():
         st.metric("Database", "Rob Burbea Talks")
 
         st.subheader("Model Stack")
-        # Clean up names for display
         reranker_name = engine.env.models.reranker_model.replace("cross-encoder/", "")
         embedder_name = engine.env.models.embedding_model
         llm_name = engine.env.models.default_llm_model
@@ -100,65 +140,52 @@ def main():
         st.markdown("---")
         st.subheader("Tuning")
 
-        top_k = st.slider(
-            "Final Context Chunks",
-            min_value=1,
-            max_value=15,
-            value=engine.env.rag.top_k_results,
-            help="How many chunks are actually sent to the LLM.",
-        )
-
+        top_k = st.slider("Final Context Chunks", 1, 15, engine.env.rag.top_k_results)
         rerank_mult = st.slider(
             "Rerank Scan Depth (x)",
-            min_value=1,
-            max_value=10,
-            value=engine.env.rag.rerank_depth_multiplier,
-            help=f"Retrieves {top_k} × (this value) candidates from DB, then selects the best {top_k}.",
+            1,
+            10,
+            engine.env.rag.rerank_depth_multiplier,
+            help=f"Retrieves {top_k} × (this value) candidates from DB.",
         )
-
-        dist_threshold = st.slider(
-            "Max Distance (Pre-filter)",
-            min_value=0.0,
-            max_value=2.0,
-            value=engine.env.rag.similarity_threshold,
-            step=0.05,
-            help="Initial cutoff before reranking. Higher = More candidates allowed.",
-        )
+        dist_threshold = st.slider("Max Distance (Pre-filter)", 0.0, 2.0, engine.env.rag.similarity_threshold, 0.05)
 
         st.markdown("---")
         if st.button("Clear Chat"):
             st.session_state.messages = []
             st.rerun()
 
-    # --- CHAT HISTORY ---
+    # --- CHAT HISTORY RENDER LOOP ---
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
+            # A. Render Telemetry (Static from history)
+            if "telemetry" in msg:
+                t_box = st.empty()
+                render_telemetry_box(t_box, msg["telemetry"], final=True)
+
+            # B. Render Content
             st.markdown(msg["content"])
 
-            # Render Citations
+            # C. Render Citations
             if msg.get("citations"):
                 refs_map = msg.get("references_map", {})
                 citation_ids = msg["citations"]
-
                 if citation_ids:
-                    st.markdown("---")
-                    st.caption("📚 References:")
-                    for ref_id in citation_ids:
-                        ref_id = int(ref_id)
-                        if ref_id in refs_map:
-                            meta = refs_map[ref_id]["metadata"]
-                            source_name = meta.get("source", "Unknown").split("/")[-1]
+                    with st.expander(f"📚 Sources ({len(citation_ids)})"):
+                        for ref_id in citation_ids:
+                            ref_id = int(ref_id)
+                            if ref_id in refs_map:
+                                meta = refs_map[ref_id]["metadata"]
+                                source_name = meta.get("source", "Unknown").split("/")[-1]
+                                para_str = meta.get("paragraph_index", "0")
+                                chunk_str = meta.get("chunk_position", "0")
 
-                            # FIX: Keep raw strings for DB lookup, use int only for Display
-                            para_str = meta.get("paragraph_index", "0")
-                            chunk_str = meta.get("chunk_position", "0")
+                                try:
+                                    human_para = int(para_str) + 1
+                                except ValueError:
+                                    human_para = "?"
 
-                            try:
-                                human_para = int(para_str) + 1
-                            except ValueError:
-                                human_para = "?"
-
-                            with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
+                                st.markdown(f"**[{ref_id}] {source_name} (Para {human_para})**")
                                 try:
                                     reconstruction = reconstruct_paragraph_with_hit(
                                         engine.collection,
@@ -167,12 +194,11 @@ def main():
                                         hit_chunk_position=chunk_str,
                                     )
                                     st.markdown(reconstruction["marked_text"], unsafe_allow_html=True)
+                                    st.divider()
                                 except Exception as e:
                                     st.caption(f"Error retrieving text: {e}")
-                        else:
-                            st.warning(f"⚠️ Reference [{ref_id}] cited but not found.")
 
-    # --- INPUT ---
+    # --- INPUT HANDLING ---
     if not st.session_state.messages:
         st.markdown("### 💡 Try asking:")
         col1, col2, col3 = st.columns(3)
@@ -196,94 +222,86 @@ def main():
 
         with st.chat_message("assistant"):
 
-            status_box = st.empty()
-            answer_placeholder = st.empty()
+            # 1. Create Layout Placeholders
+            telemetry_box = st.empty()
+            answer_box = st.empty()
 
             full_response = ""
             references_map = {}
             used_ids = []
             stream = None
+            telemetry = {}
 
-            # --- PHASE 1: RETRIEVAL & SETUP ---
-            with status_box.status("🧠 Thinking...", expanded=True) as status:
+            t_start_total = time.time()
+
+            # --- PHASE 1: PROCESSING (Spinner) ---
+            with st.spinner("🧠 Thinking..."):
                 try:
-                    # Step 1: Retrieval with variable depth
-                    # Calculate total candidates for UI feedback
-                    total_candidates = top_k * rerank_mult
-                    st.write(f"🔍 Scanning {total_candidates} candidates...")
-
+                    # 1. Retrieval
+                    t0 = time.time()
                     context_str, references_map = engine.retrieve_and_rerank(
                         final_prompt,
                         top_k=top_k,
                         distance_threshold=dist_threshold,
-                        rerank_depth_multiplier=rerank_mult,  # Pass the new slider value
+                        rerank_depth_multiplier=rerank_mult,
                     )
+                    t1 = time.time()
+                    telemetry["retrieval"] = t1 - t0
 
-                    st.write("⚖️ Reranking complete...")
-                    st.write("✍️ Connecting to LLM...")
+                    # 2. Connection
                     stream = engine.llm_client.stream_answer(query=final_prompt, context=context_str)
 
-                    status.update(label="✍️ Generating answer...", state="running", expanded=True)
+                    # 3. First Token (Latency Check)
+                    first_chunk = next(stream)
+                    t2 = time.time()
+                    telemetry["ttft"] = t2 - t1
 
+                except StopIteration:
+                    st.error("LLM returned empty response.")
+                    st.stop()
                 except Exception as e:
-                    status.update(label="Error", state="error")
                     st.error(f"Pipeline failed: {e}")
                     st.stop()
 
-            # --- PHASE 2: WAIT FOR FIRST TOKEN ---
-            if stream:
-                try:
-                    first_chunk = next(stream)
-                    status_box.empty()
+            # --- PHASE 2: RENDERING ---
 
-                    full_response += first_chunk
-                    answer_placeholder.markdown(full_response + "▌")
+            # A. Initial Telemetry (TTFT known)
+            render_telemetry_box(telemetry_box, telemetry, final=False)
 
-                    for chunk in stream:
-                        full_response += chunk
-                        answer_placeholder.markdown(full_response + "▌")
+            # B. Stream
+            full_response += first_chunk
+            answer_box.markdown(full_response + "▌")
 
-                    answer_placeholder.markdown(full_response)
+            for chunk in stream:
+                full_response += chunk
+                answer_box.markdown(full_response + "▌")
 
-                    # 4. REFERENCE RESOLUTION
-                    used_ids = resolve_references(full_response)
+            answer_box.markdown(full_response)
 
-                    if used_ids:
-                        st.markdown("---")
-                        st.caption("📚 References:")
-                        for ref_id in used_ids:
-                            if ref_id in references_map:
-                                meta = references_map[ref_id]["metadata"]
-                                source_name = meta.get("source", "Unknown").split("/")[-1]
+            # --- PHASE 3: FINAL METRICS ---
+            t_end_total = time.time()
 
-                                para_str = meta.get("paragraph_index", "0")
-                                chunk_str = meta.get("chunk_position", "0")
+            gen_time = t_end_total - t2
+            word_count = len(full_response.split())
+            speed = word_count / gen_time if gen_time > 0 else 0
 
-                                try:
-                                    human_para = int(para_str) + 1
-                                except ValueError:
-                                    human_para = "?"
+            telemetry["total_gen"] = gen_time
+            telemetry["speed"] = speed
+            telemetry["total_wall"] = t_end_total - t_start_total
 
-                                with st.expander(f"[{ref_id}] {source_name} (Para {human_para})"):
-                                    try:
-                                        reconstruction = reconstruct_paragraph_with_hit(
-                                            engine.collection,
-                                            source=meta["source"],
-                                            paragraph_index=para_str,
-                                            hit_chunk_position=chunk_str,
-                                        )
-                                        st.markdown(reconstruction["marked_text"], unsafe_allow_html=True)
-                                    except Exception as e:
-                                        st.caption(f"Error retrieving text: {e}")
-                            else:
-                                st.warning(f"⚠️ Reference [{ref_id}] cited but not found.")
+            render_telemetry_box(telemetry_box, telemetry, final=True)
 
-                except StopIteration:
-                    status_box.empty()
-                    answer_placeholder.markdown("No response generated.")
+            used_ids = resolve_references(full_response)
 
+        # --- SAVE TO HISTORY ---
         st.session_state.messages.append(
-            {"role": "assistant", "content": full_response, "references_map": references_map, "citations": used_ids}
+            {
+                "role": "assistant",
+                "content": full_response,
+                "references_map": references_map,
+                "citations": used_ids,
+                "telemetry": telemetry,
+            }
         )
         st.rerun()
 
