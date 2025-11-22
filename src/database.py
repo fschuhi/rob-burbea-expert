@@ -15,7 +15,6 @@ class ChromaConnector:
     def __init__(self, env: Env):
         """
         Initialize the ChromaDB client using the path defined in Env.
-
         We use PersistentClient to ensure data is saved to disk at:
         env.paths.chroma_db_dir
         """
@@ -25,21 +24,18 @@ class ChromaConnector:
     def get_collection(self, name: str, embedding_function=None) -> Collection:
         """
         Get or create a ChromaDB collection.
-
         Args:
             name: The name of the collection (e.g., "rob_burbea_talks").
             embedding_function: The function used to embed text.
                                 If None, ChromaDB uses its default (all-MiniLM-L6-v2).
-                                We allow passing this to support dependency injection (testing).
+        We allow passing this to support dependency injection (testing).
 
         Returns:
             A ChromaDB Collection object.
         """
         # We explicitly set cosine distance as it is standard for semantic search
         return self.client.get_or_create_collection(
-            name=name,
-            embedding_function=embedding_function,
-            metadata={"hnsw:space": "cosine"}
+            name=name, embedding_function=embedding_function, metadata={"hnsw:space": "cosine"}
         )
 
     def reset(self):
@@ -53,71 +49,52 @@ class ChromaConnector:
 # --- Paragraph Reconstruction Helpers ---
 
 
-def get_paragraph_chunks(
-    collection: Collection,
-    source: str,
-    paragraph_index: int
-) -> list[dict[str, Any]]:
+def get_paragraph_chunks(collection: Collection, source: str, paragraph_index: int | str) -> list[dict[str, Any]]:
     """
     Fetch all chunks belonging to a specific paragraph, sorted by chunk_position.
-
     Args:
         collection: ChromaDB collection to query
         source: Source file path (e.g., "path/to/talk.md")
-        paragraph_index: The paragraph index in the source document
+        paragraph_index: The paragraph index in the source document (int or str)
 
     Returns:
         List of dicts with 'id', 'text', 'metadata' keys, sorted by chunk_position.
         Returns empty list if no chunks found.
-
-    Example:
-        >>> chunks = get_paragraph_chunks(collection, "talk.md", 5)
-        >>> for chunk in chunks:
-        ...     print(f"Position {chunk['metadata']['chunk_position']}: {chunk['text'][:50]}")
     """
+    # FIX: Ensure paragraph_index is a string for the query, as Chroma metadata
+    # is often stored as strings.
+    str_para_index = str(paragraph_index)
+
     # Query with metadata filter for source AND paragraph_index
-    results = collection.get(
-        where={
-            "$and": [
-                {"source": source},
-                {"paragraph_index": paragraph_index}
-            ]
-        }
-    )
+    results = collection.get(where={"$and": [{"source": source}, {"paragraph_index": str_para_index}]})
 
     # Combine into list of dicts
     chunks = []
-    for i in range(len(results['ids'])):
-        chunks.append({
-            'id': results['ids'][i],
-            'text': results['documents'][i],
-            'metadata': results['metadatas'][i]
-        })
+    for i in range(len(results["ids"])):
+        chunks.append({"id": results["ids"][i], "text": results["documents"][i], "metadata": results["metadatas"][i]})
 
-    # Sort by chunk_position (0, 1, 2, ...)
-    chunks.sort(key=lambda x: x['metadata']['chunk_position'])
+    # FIX: Sort by chunk_position cast to INT.
+    # If we sort strings, "10" comes before "2". We need numeric sorting.
+    try:
+        chunks.sort(key=lambda x: int(x["metadata"]["chunk_position"]))
+    except (ValueError, TypeError):
+        # Fallback if data is corrupted, though unlikely
+        chunks.sort(key=lambda x: str(x["metadata"].get("chunk_position", "0")))
 
     return chunks
 
 
 def reconstruct_paragraph_with_hit(
-    collection: Collection,
-    source: str,
-    paragraph_index: int,
-    hit_chunk_position: int
+    collection: Collection, source: str, paragraph_index: int | str, hit_chunk_position: int | str
 ) -> dict[str, Any]:
     """
     Reconstruct a full paragraph from its chunks and mark the hit chunk with XML tags.
-
-    This is the core function for displaying search results with full context.
-    It fetches all chunks for a paragraph, reassembles them in order, and wraps
-    the matching chunk with <hit>...</hit> tags for downstream rendering.
 
     Args:
         collection: ChromaDB collection to query
         source: Source file path
         paragraph_index: The paragraph index in the source document
-        hit_chunk_position: Which chunk within the paragraph was the search hit (0-indexed)
+        hit_chunk_position: Which chunk within the paragraph was the search hit
 
     Returns:
         Dict with:
@@ -128,26 +105,25 @@ def reconstruct_paragraph_with_hit(
 
     Raises:
         ValueError: If no chunks found or hit_chunk_position is invalid
-
-    Example:
-        >>> result = reconstruct_paragraph_with_hit(coll, "talk.md", 12, 1)
-        >>> print(result['marked_text'])
-        "First chunk text. <hit>Second chunk text.</hit> Third chunk text."
     """
     chunks = get_paragraph_chunks(collection, source, paragraph_index)
 
     if not chunks:
-        raise ValueError(
-            f"No chunks found for source='{source}', paragraph_index={paragraph_index}"
-        )
+        raise ValueError(f"No chunks found for source='{source}', paragraph_index={paragraph_index}")
 
     # Reconstruct full text (no markup)
-    full_text = " ".join(chunk['text'] for chunk in chunks)
+    full_text = " ".join(chunk["text"] for chunk in chunks)
 
     # Find the hit chunk
+    # FIX: Ensure robust integer comparison between DB metadata and argument
     hit_chunk = None
+    target_pos = int(hit_chunk_position)
+
     for chunk in chunks:
-        if chunk['metadata']['chunk_position'] == hit_chunk_position:
+        # Safe cast from DB metadata string to int
+        current_pos = int(chunk["metadata"]["chunk_position"])
+
+        if current_pos == target_pos:
             hit_chunk = chunk
             break
 
@@ -160,16 +136,17 @@ def reconstruct_paragraph_with_hit(
     # Build marked text with <hit> tags around the hit chunk
     marked_parts = []
     for chunk in chunks:
-        if chunk['metadata']['chunk_position'] == hit_chunk_position:
+        current_pos = int(chunk["metadata"]["chunk_position"])
+        if current_pos == target_pos:
             marked_parts.append(f"<hit>{chunk['text']}</hit>")
         else:
-            marked_parts.append(chunk['text'])
+            marked_parts.append(chunk["text"])
 
     marked_text = " ".join(marked_parts)
 
     return {
-        'full_text': full_text,
-        'marked_text': marked_text,
-        'hit_text': hit_chunk['text'],
-        'num_chunks': len(chunks)
+        "full_text": full_text,
+        "marked_text": marked_text,
+        "hit_text": hit_chunk["text"],
+        "num_chunks": len(chunks),
     }

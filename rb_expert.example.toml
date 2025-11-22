@@ -15,8 +15,13 @@ metadata_path = "data/raw_talks/metadata.json"
 # Sentence transformer model for embeddings
 # Options: "all-MiniLM-L6-v2" (fast, good), "all-mpnet-base-v2" (slower, better)
 embedding_model = "all-MiniLM-L6-v2"
+
+# Cross-encoder for reranking retrieval results (High Precision)
+reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
 # Default Ollama model for queries
 default_llm_model = "dolphin-mistral:7b"
+
 # Available models (for UI selection)
 available_llm_models = [
     "dolphin-mistral:7b",
@@ -30,6 +35,8 @@ chunk_size = 500
 chunk_overlap = 50
 # Number of chunks to retrieve for each query
 top_k_results = 5
+# Multiplier for the initial retrieval pool (top_k * multiplier) before reranking
+rerank_depth_multiplier = 5
 # Minimum similarity score for retrieval (0.0 to 1.0)
 similarity_threshold = 0.75
 # Use langchain splitter (true) or fast manual splitter (false)
