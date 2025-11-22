@@ -1,6 +1,7 @@
 (This list is an unordered list of smaller TODOs which has come up while developing the solution.)
 
-- **Operation: Polish & Publish** - Update README.md and Makefile to reflect the new RAG engine and Answer Generator app (include startollama/killollama targets)
+- **Latency Feedback** - Implement a "Thinking..." or "Waiting for response..." spinner/status indicator to bridge the gap between query submission and the first streamed token.
+- **Zen Mode Generation** - Replace token streaming with a subtle "Generating..." status indicator (word count/speed) to prevent UI jumping/scrolling while the user reads.
 - **UX Elegance: Footnotes** - Change citation style from verbose [Filename, Para] to [1], [2] footnotes with a reference list at the bottom.
 - **Silencing the Linter** - Fix "Type of '__init__' is incompatible with 'EmbeddingFunction'" warnings in src/models.py (PyCharm strict type checking issue)
 - **Data Liberation** - Add export functionality to save search results to markdown/JSON

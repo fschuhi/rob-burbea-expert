@@ -40,9 +40,15 @@ htmlcov/
 .tox/
 
 # Project-specific: Runtime data
-data/
+# Use a leading slash to explicitly target ONLY the root data folder
+/data/*
 *.db
 *.sqlite
+
+# Allow the folder structure markers (anchored to root)
+!/data/.gitkeep
+!/data/raw_talks/.gitkeep
+!/data/chroma_db/.gitkeep
 
 # Jupyter
 .ipynb_checkpoints/

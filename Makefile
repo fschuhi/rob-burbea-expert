@@ -137,12 +137,19 @@ index: $(SETUP_STAMP)
 		); \
 		run_indexer(env)"
 
+# Ingest pilot data safely (does not overwrite existing metadata)
 ingest-pilot: $(SETUP_STAMP)
-	@echo "--- Copying pilot data to data/raw_talks ---"
 	@mkdir -p data/raw_talks
-	@cp tests/fixtures/data/raw_talks/*.md data/raw_talks/
-	@cp tests/fixtures/data/metadata.json data/raw_talks/
-	@echo "--- Indexing pilot data to production DB (data/chroma_db) ---"
+	@if [ -f data/raw_talks/metadata.json ]; then \
+		echo "⚠️  Metadata file already exists. Skipping copy to prevent overwriting."; \
+	else \
+		echo "--- Copying pilot metadata ---"; \
+		cp tests/fixtures/data/metadata.json data/raw_talks/; \
+	fi
+	@echo "--- Copying pilot talks (skipping existing) ---"
+	@# cp -n does not overwrite existing files
+	@cp -n tests/fixtures/data/raw_talks/*.md data/raw_talks/ || true
+	@echo "--- Indexing production DB (data/chroma_db) ---"
 	$(RUN_WITH_PATH) python -m src.indexing
 
 # --- Ollama Management Targets ---
