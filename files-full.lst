@@ -3,12 +3,13 @@ LLM-instructions.txt
 project-tree.txt
 Makefile
 README.md
+TODO.lst
 rb_expert.example.toml
 requirements.txt
 pyproject.toml
 .gitignore
 .gitattributes
-TODO.lst
+.pre-commit-config.yaml
 
 # data/raw_talks/metadata.json
 

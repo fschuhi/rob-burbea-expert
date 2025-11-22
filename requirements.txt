@@ -23,5 +23,9 @@ flake8>=6.0.0
 streamlit>=1.30.0
 Markdown>=3.4
 
+# black pre-commit hook, to enforce formatting standard
+pre-commit
+black
+
 # --- Optional / Future ---
 # langchain-text-splitters  # Removed: We use our custom manual splitter in data_prep.py

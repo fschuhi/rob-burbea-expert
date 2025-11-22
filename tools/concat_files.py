@@ -2,7 +2,11 @@
 from pathlib import Path
 import sys
 
-SEP_FMT = "\n\n======= {name} =======\n\n"
+# XML Template for each file
+FILE_TEMPLATE = """<document path="{path}">
+{content}
+</document>
+"""
 
 
 def concat(list_file: Path, out):
@@ -11,34 +15,38 @@ def concat(list_file: Path, out):
         return 1
 
     try:
-        # utf-8-sig handles potential BOMs (common on Windows-edited files)
+        # utf-8-sig handles potential BOMs
         lines = list_file.read_text(encoding="utf-8-sig").splitlines()
-    # --- FIX: Catch specific errors ---
     except (OSError, UnicodeDecodeError) as e:
         out.write(f"Error: Cannot read file '{list_file}': {e}\n")
         return 1
 
+    # Write the opening root tag
+    out.write("<documents>\n")
+
     for raw in lines:
         name = raw.strip()
 
-        # Skip empty lines and comment lines (after stripping)
+        # Skip empty lines and comments
         if not name or name.startswith("#"):
             continue
 
-        out.write(SEP_FMT.format(name=name))
         p = Path(name)
         if p.exists() and p.is_file():
             try:
-                out.write(p.read_text(encoding="utf-8"))
-            # --- FIX: Catch specific errors ---
+                content = p.read_text(encoding="utf-8")
+                # Optional: Escape XML special characters if necessary,
+                # though LLMs are usually robust enough with raw code in these tags.
+                # For strict correctness, one might wrap content in CDATA,
+                # but simple tag wrapping is the current standard for prompts.
+                out.write(FILE_TEMPLATE.format(path=name, content=content))
             except (OSError, UnicodeDecodeError) as e:
-                out.write(f"Error: Cannot read file '{name}': {e}\n")
+                out.write(f"\n")
         else:
-            out.write(f"Error: Cannot read file '{name}'\n")
-        out.write("\n")
+            out.write(f"\n")
 
-    # Ensure at least one empty line at the end
-    out.write("\n")
+    # Write the closing root tag
+    out.write("</documents>\n")
     return 0
 
 

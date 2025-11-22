@@ -14,7 +14,7 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction):
     """
 
     # noinspection PyMissingConstructor
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):  # type: ignore[super-init-not-called]
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):  # type: ignore[override]
         self.model_name = model_name
         if SentenceTransformer is None:
             raise ImportError("sentence-transformers is not installed.")

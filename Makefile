@@ -13,7 +13,7 @@ APP_PORT = 8501
 CHAT_PORT = 8502
 
 # --- Phony targets ---
-.PHONY: all setup test test-verbose test-fast index app chat clean showtree gentree filesdump startollama killollama startapp killapp startchat killchat ingest-pilot
+.PHONY: all setup test test-verbose test-fast index app chat clean showtree gentree filesdump startollama killollama startapp killapp startchat killchat ingest-pilot help
 
 # Default target runs 'setup'
 all: setup
@@ -36,32 +36,29 @@ $(SETUP_STAMP): $(VENV_ACTIVATE) requirements.txt pyproject.toml
 	@echo "--- Setup complete ---"
 	@touch $(SETUP_STAMP)
 
-setup: $(SETUP_STAMP)
+setup: $(SETUP_STAMP) ## Create venv and install dependencies
 
 # --- Testing Targets ---
-test: $(SETUP_STAMP)
+test: $(SETUP_STAMP) ## Run all tests (quiet mode)
 	$(RUN_WITH_PATH) pytest -q
 
-test-verbose: $(SETUP_STAMP)
+test-verbose: $(SETUP_STAMP) ## Run tests with verbose output
 	$(RUN_WITH_PATH) pytest -v -s
 
-test-fast: $(SETUP_STAMP)
+test-fast: $(SETUP_STAMP) ## Run fast tests only (skip retrieval)
 	$(RUN_WITH_PATH) pytest -q --ignore=tests/test_retrieval.py
 
 # --- Application Targets (Foreground) ---
 
-# Run Search Explorer (Foreground)
-app: $(SETUP_STAMP)
+app: $(SETUP_STAMP) ## Run Search Explorer in foreground (blocks terminal)
 	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/search_explorer.py --server.port $(APP_PORT)
 
-# Run Answer Generator (Foreground)
-chat: $(SETUP_STAMP)
+chat: $(SETUP_STAMP) ## Run Answer Generator in foreground (blocks terminal)
 	$(ACTIVATE) && PYTHONPATH=. streamlit run apps/answer_generator.py --server.port $(CHAT_PORT)
 
 # --- Application Targets (Background) ---
 
-# Start Search Explorer in Background
-startapp: $(SETUP_STAMP)
+startapp: $(SETUP_STAMP) ## Start Search Explorer in background (Daemon)
 	@if lsof -i :$(APP_PORT) > /dev/null; then \
 		echo "✅ Search Explorer is already running on port $(APP_PORT)."; \
 	else \
@@ -78,8 +75,7 @@ startapp: $(SETUP_STAMP)
 		fi \
 	fi
 
-# Stop Search Explorer
-killapp:
+killapp: ## Stop Search Explorer background process
 	@if lsof -i :$(APP_PORT) > /dev/null; then \
 		echo "🛑 Stopping Search Explorer..."; \
 		lsof -ti :$(APP_PORT) | xargs kill; \
@@ -88,8 +84,7 @@ killapp:
 		echo "Search Explorer is not running."; \
 	fi
 
-# Start Answer Generator in Background
-startchat: $(SETUP_STAMP)
+startchat: $(SETUP_STAMP) ## Start Answer Generator in background (Daemon)
 	@if lsof -i :$(CHAT_PORT) > /dev/null; then \
 		echo "✅ Answer Generator is already running on port $(CHAT_PORT)."; \
 	else \
@@ -106,8 +101,7 @@ startchat: $(SETUP_STAMP)
 		fi \
 	fi
 
-# Stop Answer Generator
-killchat:
+killchat: ## Stop Answer Generator background process
 	@if lsof -i :$(CHAT_PORT) > /dev/null; then \
 		echo "🛑 Stopping Answer Generator..."; \
 		lsof -ti :$(CHAT_PORT) | xargs kill; \
@@ -118,7 +112,7 @@ killchat:
 
 # --- Data Management Targets ---
 
-index: $(SETUP_STAMP)
+index: $(SETUP_STAMP) ## Index 32 talks to TEST database (tmp/)
 	@echo "--- Indexing 32 talks to tmp/chroma_db_retrieval ---"
 	@rm -rf tmp/chroma_db_retrieval
 	$(RUN_WITH_PATH) python -c "from pathlib import Path; \
@@ -137,8 +131,7 @@ index: $(SETUP_STAMP)
 		); \
 		run_indexer(env)"
 
-# Ingest pilot data safely (does not overwrite existing metadata)
-ingest-pilot: $(SETUP_STAMP)
+ingest-pilot: $(SETUP_STAMP) ## Copy pilot data to data/ and index to PRODUCTION DB
 	@mkdir -p data/raw_talks
 	@if [ -f data/raw_talks/metadata.json ]; then \
 		echo "⚠️  Metadata file already exists. Skipping copy to prevent overwriting."; \
@@ -154,7 +147,7 @@ ingest-pilot: $(SETUP_STAMP)
 
 # --- Ollama Management Targets ---
 
-startollama:
+startollama: ## Start Ollama server in background if not running
 	@if lsof -i :11434 > /dev/null; then \
 		echo "✅ Ollama is already running."; \
 	else \
@@ -166,7 +159,7 @@ startollama:
 		if lsof -i :11434 > /dev/null; then echo "✅ Ollama started successfully."; else echo "❌ Failed to start."; fi \
 	fi
 
-killollama:
+killollama: ## Kill the running Ollama server
 	@if lsof -i :11434 > /dev/null; then \
 		echo "🛑 Stopping Ollama..."; \
 		lsof -ti :11434 | xargs kill; \
@@ -177,16 +170,19 @@ killollama:
 
 # --- Utility Targets ---
 
-filesdump: $(SETUP_STAMP)
+filesdump: $(SETUP_STAMP) ## Create context dump for LLMs
 	$(RUN_WITH_PATH) python tools/concat_files.py files.lst > tmp/filesdump.txt
 
-clean:
+clean: ## Remove venv, cache, and tmp files
 	rm -rf $(VENV_DIR) .pytest_cache tmp
 	find . -name "__pycache__" -type d -prune -exec rm -rf {} +
 	find . -name "*.egg-info" -type d -prune -exec rm -rf {} +
 
-showtree:
+showtree: ## Show project directory structure
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp"
 
-gentree:
+gentree: ## Save tree structure to file
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt
+
+help: ## Show this help message
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
