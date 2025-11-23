@@ -170,7 +170,7 @@ killollama: ## Kill the running Ollama server
 
 # --- Utility Targets ---
 
-filesdump: $(SETUP_STAMP) ## Create context dump for LLMs
+filesdump: $(SETUP_STAMP) gentree ## Create context dump for LLMs
 	$(RUN_WITH_PATH) python tools/concat_files.py files.lst > tmp/filesdump.txt
 
 clean: ## Remove venv, cache, and tmp files
@@ -182,7 +182,7 @@ showtree: ## Show project directory structure
 	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp"
 
 gentree: ## Save tree structure to file
-	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > project-tree.txt
+	tree -I ".venv|__pycache__|.idea|.pytest_cache|*egg-info|tmp" > tmp/project-tree.txt
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

@@ -1,17 +1,15 @@
 LLM-instructions.txt
 
-project-tree.txt
+tmp/project-tree.txt
 Makefile
 README.md
-TODO.lst
-rb_expert.example.toml
+TODO.md
 requirements.txt
+
 pyproject.toml
 .gitignore
 .gitattributes
 .pre-commit-config.yaml
-
-# data/raw_talks/metadata.json
 
 apps/answer_generator.py
 apps/search_explorer.py
@@ -36,8 +34,19 @@ tests/test_models.py
 tests/test_reranker.py
 tests/test_retrieval
 
+# The production configuration in the root points to /data, is private, but we have this general example config.
+rb_expert.example.toml
+
+# The test configuration points to the fixtures
 tests/fixtures/test_env.toml
+
+# Restricted test corpus (32 talks from Practicing the Jhanas)
 tests/fixtures/data/metadata.json
+
+# Just one talk to give a good example of the corpus
 tests/fixtures/data/raw_talks/2020-01-08-going-forwards.md
+
+# Do **not** include production, neither metatadata nor the corpus
+# data/raw_talks/metadata.json
 
 tools/concat_files.py
