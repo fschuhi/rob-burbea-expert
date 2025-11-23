@@ -170,8 +170,11 @@ killollama: ## Kill the running Ollama server
 
 # --- Utility Targets ---
 
+cpmanifest: $(SETUP_STAMP) ## next filesdump will contain what manifest says
+	cp manifest.lst tmp/filesdump.lst
+
 filesdump: $(SETUP_STAMP) gentree ## Create context dump for LLMs
-	$(RUN_WITH_PATH) python tools/concat_files.py filesdump.lst > tmp/filesdump.txt
+	$(RUN_WITH_PATH) python tools/concat_files.py tmp/filesdump.lst > tmp/filesdump.txt
 
 clean: ## Remove venv, cache, and tmp files
 	rm -rf $(VENV_DIR) .pytest_cache tmp

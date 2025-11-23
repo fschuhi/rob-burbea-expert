@@ -33,15 +33,15 @@ available_llm_models = [
 chunk_size = 500
 # Overlap between chunks (helps maintain context across boundaries)
 chunk_overlap = 50
-# Number of chunks to retrieve for each query
+# Number of chunks to retrieve (Note: Engine will fetch 5x this amount for reranking)
 top_k_results = 5
-# Multiplier for the initial retrieval pool (top_k * multiplier) before reranking
-rerank_depth_multiplier = 5
 # Minimum similarity score for retrieval (0.0 to 1.0)
 similarity_threshold = 0.75
 # Use langchain splitter (true) or fast manual splitter (false)
 # Set to true if you encounter issues with the manual splitter
 use_langchain_splitter = false
+# Explicit size of the initial retrieval pool
+retrieval_pool_size = 25
 
 [ollama]
 # Local Ollama server URL

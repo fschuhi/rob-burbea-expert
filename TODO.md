@@ -1,3 +1,5 @@
+(The TODOs in this list are loosely ordered by priority, not necessarily in order of completion. See also Goals.md).
+
 ### --- BACKEND & CORE LOGIC ---
 
 - **Live Wire** - Implement a dynamic model fetcher in `src/llm.py` that calls `ollama list` to populate the model selector options in real-time.
