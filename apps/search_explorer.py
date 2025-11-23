@@ -101,6 +101,9 @@ def main():
         st.metric("Total Chunks", collection.count())
 
         st.caption(f"**Embedder:** `{engine.env.models.embedding_model}`")
+        # Added Reranker Info below Embedder
+        reranker_name = engine.env.models.reranker_model.replace("cross-encoder/", "")
+        st.caption(f"**Reranker:** `{reranker_name}`")
 
         st.markdown("---")
         st.header("⚙️ Tuning")
@@ -129,9 +132,9 @@ def main():
 
         st.markdown("---")
 
-        # 3. Distance Filter (Visual Only)
+        # 3. Distance Filter (Renamed)
         distance_threshold = st.slider(
-            "Highlight Threshold",
+            "Max Distance",
             min_value=0.0,
             max_value=2.0,
             value=engine.env.rag.similarity_threshold,
@@ -198,7 +201,6 @@ def main():
                 candidates.sort(key=lambda x: x["rank_score"], reverse=True)
         else:
             # Keep DB order (Distance Ascending)
-            # (Chroma already returns them sorted by distance)
             pass
 
         # 3. DISPLAY LOOP
@@ -213,10 +215,10 @@ def main():
             if show_full_paragraph:
                 try:
                     source = result["metadata"].get("source")
-                    # Safe cast for DB metadata
                     para_idx = result["metadata"].get("paragraph_index")
                     chunk_pos = result["metadata"].get("chunk_position")
 
+                    # Robust checks for metadata (handle string vs int)
                     if source is not None and para_idx is not None and chunk_pos is not None:
                         reconstruction = reconstruct_paragraph_with_hit(
                             collection, source=source, paragraph_index=para_idx, hit_chunk_position=chunk_pos

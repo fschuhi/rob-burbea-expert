@@ -61,8 +61,8 @@ def render_telemetry_box(container, telemetry: dict, final: bool = False):
 
     retrieval = telemetry.get("retrieval", 0.0)
     ttft = telemetry.get("ttft", 0.0)
+    reranker_status = telemetry.get("reranker_status", True)
 
-    # Dynamic header based on state
     if final:
         total_wall = telemetry.get("total_wall", 0.0)
         header = f"⏱️ Finished in {total_wall:.2f}s"
@@ -71,7 +71,9 @@ def render_telemetry_box(container, telemetry: dict, final: bool = False):
 
     # Build the log lines
     lines = []
-    lines.append(f"**Retrieval & Rerank:** `{retrieval:.2f}s`")
+
+    rerank_label = "Retrieval & Rerank" if reranker_status else "Retrieval (No Rerank)"
+    lines.append(f"**{rerank_label}:** `{retrieval:.2f}s`")
     lines.append(f"**Time to First Token:** `{ttft:.2f}s`")
 
     if final:
@@ -80,7 +82,6 @@ def render_telemetry_box(container, telemetry: dict, final: bool = False):
         lines.append(f"**Full Generation:** `{total_gen:.2f}s`")
         lines.append(f"**Speed:** `{speed:.1f} words/s`")
 
-    # Use double-space + newline for tight markdown line breaks (Log Style)
     content = "  \n".join(lines)
 
     with container.expander(header, expanded=False):
@@ -104,8 +105,17 @@ def main():
         }
         .stChatMessage { padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
 
+        /* Styling for citations */
+        strong { color: #FFD700 !important; font-weight: 900 !important; }
+
         /* Compact info boxes in sidebar */
         div[data-testid="stAlert"] { padding: 0.5rem 0.75rem; }
+
+        /* Tighten sidebar headers */
+        section[data-testid="stSidebar"] h1 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
         </style>
     """,
         unsafe_allow_html=True,
@@ -128,23 +138,23 @@ def main():
         st.header("⚙️ Settings")
         st.metric("Database", "Rob Burbea Talks")
 
-        st.subheader("Model Stack")
-        reranker_name = engine.env.models.reranker_model.replace("cross-encoder/", "")
-        embedder_name = engine.env.models.embedding_model
-        llm_name = engine.env.models.default_llm_model
+        # MODEL STACK (Compact & Styled like Search Explorer)
+        # We use markdown to mimic the "Label: Value" look with green highlighting
 
-        st.caption(f"**LLM:** `{llm_name}`")
-        st.caption(f"**Reranker:** `{reranker_name}`")
-        st.caption(f"**Embedder:** `{embedder_name}`")
+        # Clean up model names
+        reranker_clean = engine.env.models.reranker_model.replace("cross-encoder/", "")
+
+        st.markdown(f"**LLM:** `{engine.env.models.default_llm_model}`")
+        st.markdown(f"**Reranker:** `{reranker_clean}`")
+        st.markdown(f"**Embedder:** `{engine.env.models.embedding_model}`")
 
         st.markdown("---")
-        st.subheader("Tuning")
+        st.header("🛠️ Tuning")  # Added header to match SE
 
         top_k = st.slider(
             "Final Context Chunks", 1, 15, engine.env.rag.top_k_results, help="How many chunks to send to the LLM."
         )
 
-        # CHANGED: "Multiplier" -> "Retrieval Pool Size"
         retrieval_pool = st.slider(
             "Retrieval Pool Size",
             min_value=5,
@@ -155,6 +165,15 @@ def main():
         )
 
         dist_threshold = st.slider("Max Distance (Pre-filter)", 0.0, 2.0, engine.env.rag.similarity_threshold, 0.05)
+
+        apply_reranker = st.checkbox(
+            "Apply Reranker", value=True, help="Uncheck to use raw vector search only (faster, less precise)."
+        )
+
+        if apply_reranker:
+            st.info("Reranker is ACTIVE.")
+        else:
+            st.warning("Reranker is OFF.")
 
         st.markdown("---")
         if st.button("Clear Chat"):
@@ -249,15 +268,17 @@ def main():
                         final_prompt,
                         top_k=top_k,
                         distance_threshold=dist_threshold,
-                        retrieval_pool_size=retrieval_pool,  # NEW PARAMETER
+                        retrieval_pool_size=retrieval_pool,
+                        apply_reranker=apply_reranker,
                     )
                     t1 = time.time()
                     telemetry["retrieval"] = t1 - t0
+                    telemetry["reranker_status"] = apply_reranker
 
                     # 2. Connection
                     stream = engine.llm_client.stream_answer(query=final_prompt, context=context_str)
 
-                    # 3. First Token (Latency Check)
+                    # 3. First Token
                     first_chunk = next(stream)
                     t2 = time.time()
                     telemetry["ttft"] = t2 - t1
@@ -271,7 +292,7 @@ def main():
 
             # --- PHASE 2: RENDERING ---
 
-            # A. Initial Telemetry (TTFT known)
+            # A. Initial Telemetry
             render_telemetry_box(telemetry_box, telemetry, final=False)
 
             # B. Stream

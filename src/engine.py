@@ -43,14 +43,17 @@ class RAGEngine:
         top_k: Optional[int] = None,
         distance_threshold: Optional[float] = None,
         retrieval_pool_size: Optional[int] = None,
+        apply_reranker: bool = True,
     ) -> Tuple[str, Dict[int, Any]]:
         """
-        Performs the full retrieval pipeline:
-        1. Retrieve 'retrieval_pool_size' candidates from ChromaDB.
-        2. Filter by initial distance threshold.
-        3. Score (Query, Document) pairs using CrossEncoder.
-        4. Sort by Score and take top_k.
-        5. Reconstruct paragraphs for context.
+        Performs the retrieval pipeline.
+
+        Args:
+            query_text: The user's question.
+            top_k: Number of final chunks to return.
+            distance_threshold: Cutoff for vector similarity (lower is better).
+            retrieval_pool_size: How many candidates to fetch from DB (if reranking).
+            apply_reranker: If True, fetch pool_size & rerank. If False, fetch top_k & sort by distance.
 
         Returns:
             - context_str: The formatted markdown context.
@@ -63,8 +66,10 @@ class RAGEngine:
         pool_size = retrieval_pool_size if retrieval_pool_size is not None else self.env.rag.retrieval_pool_size
 
         # --- Step 1: Broad Vector Search ---
-        # Fetch the explicitly requested pool size
-        results = self.collection.query(query_texts=[query_text], n_results=pool_size)
+        # If we rerank, we need a larger pool. If not, we just need the top K.
+        initial_k = pool_size if apply_reranker else final_top_k
+
+        results = self.collection.query(query_texts=[query_text], n_results=initial_k)
 
         # Unpack Chroma results (assuming single query)
         if not results["ids"]:
@@ -76,7 +81,6 @@ class RAGEngine:
         dists = results["distances"][0]
 
         # --- Step 2: Initial Filtering ---
-        # Filter by Bi-Encoder threshold first to save computation
         candidates = []
         for i in range(len(ids)):
             if dists[i] <= final_threshold:
@@ -85,26 +89,26 @@ class RAGEngine:
         if not candidates:
             return "No relevant context found.", {}
 
-        # --- Step 3: Cross-Encoder Scoring ---
-        # Prepare pairs for CrossEncoder: [[query, doc1], [query, doc2], ...]
-        pairs = [[query_text, c["text"]] for c in candidates]
+        # --- Step 3: Scoring/Sorting ---
+        if apply_reranker:
+            # Cross-Encoder Scoring
+            pairs = [[query_text, c["text"]] for c in candidates]
+            scores = self.cross_encoder.predict(pairs)
 
-        # Predict returns a list of float scores (higher is better)
-        # Note: These are logits (unbounded), not probabilities 0-1.
-        scores = self.cross_encoder.predict(pairs)
+            for i, candidate in enumerate(candidates):
+                candidate["score"] = scores[i]
 
-        # Attach scores
-        for i, candidate in enumerate(candidates):
-            candidate["score"] = scores[i]
-
-        # Sort by Cross-Encoder score (Higher = More Relevant)
-        candidates.sort(key=lambda x: x["score"], reverse=True)
+            # Sort by Cross-Encoder score (Higher = More Relevant)
+            candidates.sort(key=lambda x: x["score"], reverse=True)
+        else:
+            # Vector Distance Sorting (Lower = More Relevant)
+            # Chroma usually returns sorted, but we sort again to be safe after filtering
+            candidates.sort(key=lambda x: x["initial_dist"])
 
         # Slice the Top-K
         top_hits = candidates[:final_top_k]
 
         # --- Step 4: Build Context ---
-        # We bypass the standard ContextBuilder.build because we have pre-sorted hits
         return self.context_builder.build_from_hits(top_hits)
 
     def answer_query(
@@ -112,7 +116,6 @@ class RAGEngine:
     ) -> Tuple[str, Iterator[str], Dict[int, Any]]:
         """
         Legacy wrapper for the full pipeline.
-        Useful for tests or simple CLI usage.
         """
         context_str, references = self.retrieve_and_rerank(query_text, top_k, distance_threshold)
 
