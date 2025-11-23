@@ -139,7 +139,7 @@ make filesdump      # Create context dump for LLMs
 
 **All 43 tests passing** ✅
 
-> **Note:** For the future roadmap and planned features, please refer to [`TODO.md`](TODO.md).
+> **Note:** For the future roadmap and planned features, please refer to [`Goals.md`](Goas.md) and [`TODO.md`](TODO.md).
 
 ---
 
