@@ -41,6 +41,18 @@ graph LR
 
 ---
 
+## Project Navigation & Context
+
+This project uses a curated "manifest" approach to manage context for both AI development and human understanding.
+
+* **[`manifest.lst`](manifest.lst)**: **Start here to understand the code structure.**
+    This file acts as a commented map of the project. It explains *why* specific files exist and groups them logically (Schema, Logic, UI, Testing). It is the single source of truth for the project's anatomy.
+
+* **`make filesdump`**:
+    Generates a complete, XML-wrapped context dump based on `manifest.lst`. This allows for seamless context switching between AI sessions or models.
+
+---
+
 ## Setup
 
 ### Requirements
