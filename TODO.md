@@ -7,7 +7,6 @@
 
 ### --- USER EXPERIENCE (UX) & FRONTEND ---
 
-- **Parity Party** - Add the `Top K` slider to the Search Explorer sidebar so it matches the flexibility of the Answer Generator.
 - **The Menu** - Add a Model Selector dropdown in the Answer Generator sidebar (populated by `Live Wire` or config).
 - **Branding Beacon** - Replace the text title "Rob Burbea Talks" in the sidebar with a configurable image (e.g., Rob's photo or a logo) in both apps.
 - **Slice & Dice** - Implement retreat/date range filters in Search Explorer sidebar.
