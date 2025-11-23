@@ -76,8 +76,8 @@ class RAG(BaseModel):
         description="Use langchain RecursiveCharacterTextSplitter (slower, battle-tested) vs manual splitter (fast).",
     )
     # --- NEW FIELD ---
-    rerank_depth_multiplier: int = Field(
-        default=5, description="Multiplier for the initial retrieval pool (top_k * multiplier) before reranking."
+    retrieval_pool_size: int = Field(
+        default=25, description="Number of raw candidates to fetch from Vector DB before reranking."
     )
 
 
@@ -226,8 +226,8 @@ def _build_env_from_data(data: Mapping[str, Any], profile: Optional[str]) -> Env
         "top_k_results": ("rag", "top_k_results"),
         "similarity_threshold": ("rag", "similarity_threshold"),
         "use_langchain_splitter": ("rag", "use_langchain_splitter"),
-        # --- NEW MAP ---
-        "rerank_depth_multiplier": ("rag", "rerank_depth_multiplier"),
+        # --- RENAMED MAPPING ---
+        "retrieval_pool_size": ("rag", "retrieval_pool_size"),
         "base_url": ("ollama", "base_url"),
         "timeout": ("ollama", "timeout"),
         "atomic_writes": ("io", "atomic_writes"),

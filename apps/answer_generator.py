@@ -140,14 +140,20 @@ def main():
         st.markdown("---")
         st.subheader("Tuning")
 
-        top_k = st.slider("Final Context Chunks", 1, 15, engine.env.rag.top_k_results)
-        rerank_mult = st.slider(
-            "Rerank Scan Depth (x)",
-            1,
-            10,
-            engine.env.rag.rerank_depth_multiplier,
-            help=f"Retrieves {top_k} × (this value) candidates from DB.",
+        top_k = st.slider(
+            "Final Context Chunks", 1, 15, engine.env.rag.top_k_results, help="How many chunks to send to the LLM."
         )
+
+        # CHANGED: "Multiplier" -> "Retrieval Pool Size"
+        retrieval_pool = st.slider(
+            "Retrieval Pool Size",
+            min_value=5,
+            max_value=100,
+            value=engine.env.rag.retrieval_pool_size,
+            step=5,
+            help="How many candidates to fetch from DB before reranking.",
+        )
+
         dist_threshold = st.slider("Max Distance (Pre-filter)", 0.0, 2.0, engine.env.rag.similarity_threshold, 0.05)
 
         st.markdown("---")
@@ -243,7 +249,7 @@ def main():
                         final_prompt,
                         top_k=top_k,
                         distance_threshold=dist_threshold,
-                        rerank_depth_multiplier=rerank_mult,
+                        retrieval_pool_size=retrieval_pool,  # NEW PARAMETER
                     )
                     t1 = time.time()
                     telemetry["retrieval"] = t1 - t0

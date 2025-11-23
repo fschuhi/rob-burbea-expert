@@ -42,11 +42,11 @@ class RAGEngine:
         query_text: str,
         top_k: Optional[int] = None,
         distance_threshold: Optional[float] = None,
-        rerank_depth_multiplier: int = 5,
+        retrieval_pool_size: Optional[int] = None,
     ) -> Tuple[str, Dict[int, Any]]:
         """
         Performs the full retrieval pipeline:
-        1. Retrieve (top_k * depth_multiplier) candidates from ChromaDB.
+        1. Retrieve 'retrieval_pool_size' candidates from ChromaDB.
         2. Filter by initial distance threshold.
         3. Score (Query, Document) pairs using CrossEncoder.
         4. Sort by Score and take top_k.
@@ -59,11 +59,12 @@ class RAGEngine:
         final_top_k = top_k if top_k is not None else self.env.rag.top_k_results
         final_threshold = distance_threshold if distance_threshold is not None else self.env.rag.similarity_threshold
 
-        # --- Step 1: Broad Vector Search ---
-        # Fetch N * Multiplier candidates to give the reranker a pool to work with
-        initial_k = final_top_k * rerank_depth_multiplier
+        # Default to env config if not overridden
+        pool_size = retrieval_pool_size if retrieval_pool_size is not None else self.env.rag.retrieval_pool_size
 
-        results = self.collection.query(query_texts=[query_text], n_results=initial_k)
+        # --- Step 1: Broad Vector Search ---
+        # Fetch the explicitly requested pool size
+        results = self.collection.query(query_texts=[query_text], n_results=pool_size)
 
         # Unpack Chroma results (assuming single query)
         if not results["ids"]:

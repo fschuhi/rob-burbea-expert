@@ -110,6 +110,8 @@ def test_answer_query_with_overrides(engine, mock_llm_client):
 
         mock_query.assert_called_once()
 
-        # FIX: The engine now fetches 5x the top_k to create a pool for the reranker
-        # So if top_k=10, we expect n_results=50
-        assert mock_query.call_args.kwargs["n_results"] == 50
+        # UPDATED: With the "Parity Party" refactor, n_results is no longer coupled to top_k.
+        # It is controlled by the explicit 'retrieval_pool_size' config.
+        # Since answer_query() (legacy) doesn't override it, it uses the env default.
+        expected_pool_size = engine.env.rag.retrieval_pool_size
+        assert mock_query.call_args.kwargs["n_results"] == expected_pool_size
