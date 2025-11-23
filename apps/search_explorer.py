@@ -2,9 +2,9 @@
 Search Explorer - Semantic search interface for Rob Burbea talks.
 
 Features:
-- Semantic Vector Search (ChromaDB)
-- Dynamic "Max Results" Slider (Parity Party)
-- Full Paragraph Reconstruction with Highlights
+- Inspect Raw Vector Search (Distance-based)
+- Inspect Reranked Results (Score-based)
+- Toggle between the two views to "debug" the Reranker's impact
 - Production Environment Loading
 
 Usage:
@@ -16,25 +16,19 @@ import markdown
 from pathlib import Path
 
 from src.env import load_env
-from src.database import ChromaConnector, reconstruct_paragraph_with_hit
-from src.models import get_embedding_function
+from src.engine import RAGEngine
+from src.database import reconstruct_paragraph_with_hit
 
 
 @st.cache_resource
-def get_collection():
+def get_engine():
     """
-    Initialize the database connection using the project configuration.
-    Uses Streamlit cache to avoid reloading the heavy embedding model.
+    Initialize the RAG Engine (cached).
+    We use the Engine here (instead of just the collection) so we can access
+    the shared CrossEncoder model without reloading it from disk.
     """
-    # Load the real environment (rb_expert.toml)
     env = load_env()
-
-    # Connect to the Production Database
-    connector = ChromaConnector(env)
-    ef = get_embedding_function(env.models.embedding_model)
-    collection = connector.get_collection("rob_burbea_talks", embedding_function=ef)
-
-    return collection, env
+    return RAGEngine(env)
 
 
 def format_source(source_path: str) -> str:
@@ -92,10 +86,11 @@ def main():
         unsafe_allow_html=True,
     )
 
-    st.title("🧘 Rob Burbea Expert - Semantic Search Explorer")
+    st.title("🧘 Rob Burbea Expert - Search Explorer")
 
     try:
-        collection, env = get_collection()
+        engine = get_engine()
+        collection = engine.collection
     except Exception as e:
         st.error(f"Failed to load database: {e}")
         st.stop()
@@ -105,32 +100,45 @@ def main():
         st.header("📊 Database")
         st.metric("Total Chunks", collection.count())
 
-        st.caption(f"**Embedder:** `{env.models.embedding_model}`")
-        st.caption(f"**Path:** `{env.paths.chroma_db_dir.name}`")
+        st.caption(f"**Embedder:** `{engine.env.models.embedding_model}`")
 
         st.markdown("---")
         st.header("⚙️ Tuning")
 
-        # PARITY PARTY: Added Max Results slider
+        # 1. The Pool Size (Chunks to fetch from DB)
         n_results = st.slider(
-            "Max Results",
+            "Retrieval Pool Size",
             min_value=5,
             max_value=100,
             value=20,
             step=5,
-            help="How many chunks to retrieve from the vector database.",
+            help="How many chunks to fetch from the Vector Database.",
         )
 
+        # 2. The Reranker Switch
+        use_reranker = st.checkbox(
+            "Apply Reranker",
+            value=False,
+            help="Sort results by Semantic Relevance (Cross-Encoder) instead of Vector Distance.",
+        )
+
+        if use_reranker:
+            st.success(f"Re-ordering the top **{n_results}** chunks by meaning.")
+        else:
+            st.info("Showing raw database order (Distance).")
+
+        st.markdown("---")
+
+        # 3. Distance Filter (Visual Only)
         distance_threshold = st.slider(
-            "Max Distance",
+            "Highlight Threshold",
             min_value=0.0,
             max_value=2.0,
-            value=env.rag.similarity_threshold,  # Use config default
+            value=engine.env.rag.similarity_threshold,
             step=0.05,
-            help="Lower = more similar. Cosine distance: 0=identical, 1=unrelated.",
+            help="Chunks beyond this distance are visually dimmed or flagged.",
         )
 
-        st.caption("• 0.0-0.7: Relevant\n• 0.7-1.0: Loosely related")
         st.markdown("---")
         show_full_paragraph = st.checkbox("Show full paragraph", value=True)
         show_chunk_ids = st.checkbox("Show IDs", value=False)
@@ -151,95 +159,125 @@ def main():
 
     if query:
         with st.spinner("Searching..."):
-            # Use the dynamic slider value for n_results
+            # 1. RAW RETRIEVAL
             results = collection.query(query_texts=[query], n_results=n_results)
 
-        # Filter results by distance
-        filtered_results = []
-        if results["ids"]:
-            # Access [0] because we sent a single query
-            for idx in range(len(results["ids"][0])):
-                dist = results["distances"][0][idx]
-                if dist <= distance_threshold:
-                    filtered_results.append(
-                        {
-                            "id": results["ids"][0][idx],
-                            "document": results["documents"][0][idx],
-                            "metadata": results["metadatas"][0][idx],
-                            "distance": dist,
-                        }
-                    )
+        if not results["ids"]:
+            st.warning("No results found.")
+            st.stop()
 
-        if filtered_results:
-            st.markdown(f"Found **{len(filtered_results)}** chunks (Distance ≤ {distance_threshold})")
+        # Unpack Chroma structure
+        ids = results["ids"][0]
+        docs = results["documents"][0]
+        metas = results["metadatas"][0]
+        dists = results["distances"][0]
+
+        # Convert to list of dicts for easier handling
+        candidates = []
+        for i in range(len(ids)):
+            candidates.append(
+                {
+                    "id": ids[i],
+                    "document": docs[i],
+                    "metadata": metas[i],
+                    "distance": dists[i],
+                    "rank_score": 0.0,  # Placeholder
+                }
+            )
+
+        # 2. OPTIONAL RERANKING
+        if use_reranker:
+            with st.spinner("Reranking..."):
+                pairs = [[query, c["document"]] for c in candidates]
+                scores = engine.cross_encoder.predict(pairs)
+
+                for i, candidate in enumerate(candidates):
+                    candidate["rank_score"] = scores[i]
+
+                # Sort by Score (Descending)
+                candidates.sort(key=lambda x: x["rank_score"], reverse=True)
+        else:
+            # Keep DB order (Distance Ascending)
+            # (Chroma already returns them sorted by distance)
+            pass
+
+        # 3. DISPLAY LOOP
+        st.markdown(f"Showing **{len(candidates)}** chunks")
+        st.markdown("---")
+
+        for idx, result in enumerate(candidates, start=1):
+            display_text = result["document"]
+            reconstruction_error = None
+
+            # --- Reconstruction Logic ---
+            if show_full_paragraph:
+                try:
+                    source = result["metadata"].get("source")
+                    # Safe cast for DB metadata
+                    para_idx = result["metadata"].get("paragraph_index")
+                    chunk_pos = result["metadata"].get("chunk_position")
+
+                    if source is not None and para_idx is not None and chunk_pos is not None:
+                        reconstruction = reconstruct_paragraph_with_hit(
+                            collection, source=source, paragraph_index=para_idx, hit_chunk_position=chunk_pos
+                        )
+                        display_text = reconstruction["marked_text"]
+                    else:
+                        reconstruction_error = "⚠️ Missing metadata for reconstruction"
+                except Exception as e:
+                    reconstruction_error = f"⚠️ Reconstruction failed: {str(e)}"
+
+            # --- HTML Formatting ---
+            html_content = markdown.markdown(display_text)
+            html_content = html_content.replace("<p>", "").replace("</p>", "")
+            source_file = result["metadata"].get("source", "Unknown")
+
+            # --- Header Metrics ---
+            if use_reranker:
+                # Show SCORE as primary metric
+                metric_html = f'<span style="font-weight: bold; font-size: 1rem; color: #4CAF50;">Score: {result["rank_score"]:.2f}</span>'
+                sub_metric = f'<span style="color: #888; font-size: 0.8rem; margin-left: 10px;">(Dist: {result["distance"]:.3f})</span>'
+            else:
+                # Show DISTANCE as primary metric
+                # Highlight good distances in green, bad in grey
+                color = "#4CAF50" if result["distance"] <= distance_threshold else "#888"
+                metric_html = f'<span style="font-weight: bold; font-size: 1rem; color: {color};">Dist: {result["distance"]:.4f}</span>'
+                sub_metric = ""
+
+            # --- Debug Info ---
+            chunk_id_div = ""
+            if show_chunk_ids:
+                chunk_id_div = f'<div style="font-size: 0.7rem; color: #666; margin-bottom: 2px; font-family: monospace;">ID: {result["id"]}</div>'
+
+            # --- Card Construction ---
+            card_html = (
+                f'<div class="result-card">'
+                f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">'
+                # Left: Index + Filename
+                f'<span style="font-weight: bold; font-size: 1rem;">#{idx} · {format_source(source_file)}</span>'
+                # Right: Metric
+                f"<div>{metric_html}{sub_metric}</div>"
+                f"</div>"
+                f"{chunk_id_div}"
+                # Content Body
+                f'<div style="margin-top: 2px; margin-bottom: 0; padding: 0.25rem 0.75rem; border-left: 3px solid #444; font-size: 0.9rem; line-height: 1.5;">'
+                f"{html_content}"
+                f"</div>"
+                f"</div>"
+            )
+
+            st.markdown(card_html, unsafe_allow_html=True)
+
+            if reconstruction_error and show_chunk_debug:
+                st.caption(reconstruction_error)
+
+            if show_chunk_debug:
+                st.json(result["metadata"])
+
             st.markdown("---")
 
-            for idx, result in enumerate(filtered_results, start=1):
-                display_text = result["document"]
-                reconstruction_error = None
-
-                # Attempt to reconstruct full paragraph context
-                if show_full_paragraph:
-                    try:
-                        source = result["metadata"].get("source")
-                        # Convert to int if stored as float/str in DB
-                        para_idx = int(result["metadata"].get("paragraph_index", -1))
-                        chunk_pos = int(result["metadata"].get("chunk_position", -1))
-
-                        if source is not None and para_idx >= 0 and chunk_pos >= 0:
-                            reconstruction = reconstruct_paragraph_with_hit(
-                                collection, source=source, paragraph_index=para_idx, hit_chunk_position=chunk_pos
-                            )
-                            display_text = reconstruction["marked_text"]
-                        else:
-                            reconstruction_error = "⚠️ Missing metadata for reconstruction"
-                    except Exception as e:
-                        # Fallback to raw text if reconstruction fails
-                        reconstruction_error = f"⚠️ Reconstruction failed: {str(e)}"
-
-                # HTML Formatting
-                html_content = markdown.markdown(display_text)
-                # Strip <p> tags for tighter layout
-                html_content = html_content.replace("<p>", "").replace("</p>", "")
-
-                source_file = result["metadata"].get("source", "Unknown")
-
-                # Optional Debug info
-                chunk_id_div = ""
-                if show_chunk_ids:
-                    chunk_id_div = f'<div style="font-size: 0.7rem; color: #666; margin-bottom: 2px; font-family: monospace;">ID: {result["id"]}</div>'
-
-                # Card HTML Construction
-                card_html = (
-                    f'<div class="result-card">'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">'
-                    # Left: Filename
-                    f'<span style="font-weight: bold; font-size: 1rem;">#{idx} · {format_source(source_file)}</span>'
-                    # Right: Distance Score
-                    f'<span style="font-weight: bold; font-size: 1rem; color: #888;">{result["distance"]:.4f}</span>'
-                    f"</div>"
-                    f"{chunk_id_div}"
-                    # Content Body
-                    f'<div style="margin-top: 2px; margin-bottom: 0; padding: 0.25rem 0.75rem; border-left: 3px solid #444; font-size: 0.9rem; line-height: 1.5;">'
-                    f"{html_content}"
-                    f"</div>"
-                    f"</div>"
-                )
-
-                st.markdown(card_html, unsafe_allow_html=True)
-
-                if reconstruction_error and show_chunk_debug:
-                    st.caption(reconstruction_error)
-
-                if show_chunk_debug:
-                    st.json(result["metadata"])
-
-                st.markdown("---")
-        else:
-            st.warning(f"No chunks found with distance ≤ {distance_threshold}. Try increasing the Max Distance.")
-
     else:
-        # Landing Page Examples
+        # Landing Page
         st.markdown("**💭 Example Queries:**")
         examples = [
             "energy body meditation",

@@ -61,24 +61,24 @@ def get_paragraph_chunks(collection: Collection, source: str, paragraph_index: i
         List of dicts with 'id', 'text', 'metadata' keys, sorted by chunk_position.
         Returns empty list if no chunks found.
     """
-    # FIX: Ensure paragraph_index is a string for the query, as Chroma metadata
-    # is often stored as strings.
-    str_para_index = str(paragraph_index)
+    # REVERT: Do not force str() conversion here.
+    # Production uses Strings ("10"), Tests use Integers (10).
+    # We trust the caller to pass the correct type for the environment they are in.
 
     # Query with metadata filter for source AND paragraph_index
-    results = collection.get(where={"$and": [{"source": source}, {"paragraph_index": str_para_index}]})
+    results = collection.get(where={"$and": [{"source": source}, {"paragraph_index": paragraph_index}]})
 
     # Combine into list of dicts
     chunks = []
     for i in range(len(results["ids"])):
         chunks.append({"id": results["ids"][i], "text": results["documents"][i], "metadata": results["metadatas"][i]})
 
-    # FIX: Sort by chunk_position cast to INT.
-    # If we sort strings, "10" comes before "2". We need numeric sorting.
+    # Sort by chunk_position (Robust Sort)
+    # We attempt to cast to int for sorting, so "10" comes after "2".
     try:
         chunks.sort(key=lambda x: int(x["metadata"]["chunk_position"]))
     except (ValueError, TypeError):
-        # Fallback if data is corrupted, though unlikely
+        # Fallback for weird data
         chunks.sort(key=lambda x: str(x["metadata"].get("chunk_position", "0")))
 
     return chunks
@@ -115,13 +115,18 @@ def reconstruct_paragraph_with_hit(
     full_text = " ".join(chunk["text"] for chunk in chunks)
 
     # Find the hit chunk
-    # FIX: Ensure robust integer comparison between DB metadata and argument
+    # Robust comparison: Convert both to Int for the equality check
     hit_chunk = None
-    target_pos = int(hit_chunk_position)
+    try:
+        target_pos = int(hit_chunk_position)
+    except ValueError:
+        target_pos = hit_chunk_position  # Fallback
 
     for chunk in chunks:
-        # Safe cast from DB metadata string to int
-        current_pos = int(chunk["metadata"]["chunk_position"])
+        try:
+            current_pos = int(chunk["metadata"]["chunk_position"])
+        except ValueError:
+            current_pos = chunk["metadata"]["chunk_position"]
 
         if current_pos == target_pos:
             hit_chunk = chunk
@@ -136,7 +141,11 @@ def reconstruct_paragraph_with_hit(
     # Build marked text with <hit> tags around the hit chunk
     marked_parts = []
     for chunk in chunks:
-        current_pos = int(chunk["metadata"]["chunk_position"])
+        try:
+            current_pos = int(chunk["metadata"]["chunk_position"])
+        except ValueError:
+            current_pos = chunk["metadata"]["chunk_position"]
+
         if current_pos == target_pos:
             marked_parts.append(f"<hit>{chunk['text']}</hit>")
         else:
