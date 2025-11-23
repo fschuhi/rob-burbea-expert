@@ -15,6 +15,7 @@
 ### --- USER EXPERIENCE (UX) & FRONTEND ---
 
 - **The Menu** - Add a Model Selector dropdown in the Answer Generator sidebar (populated by `Live Wire` or config).
+- **AG Whitespace** - Remove whitespace from left pane (Answer Generator)
 - **Branding Beacon** - Replace the text title "Rob Burbea Talks" in the sidebar with a configurable image (e.g., Rob's photo or a logo) in both apps.
 - **Slice & Dice** - Implement retreat/date range filters in Search Explorer sidebar.
 - **Telemetry Carve-Out (UI wiring)** - Update both Streamlit apps to consume the new telemetry helper once it exists.
