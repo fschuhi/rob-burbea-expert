@@ -1,0 +1,66 @@
+(This file is the basis of the filesdump where it occurs. The files in the filesump are the relevant files for understanding how the project hangs together.)
+
+### --- 1. Context & Meta ---
+LLM-instructions.txt
+README.md
+manifest.lst
+TODO.md
+Makefile
+tmp/project-tree.txt
+
+### --- 2. Configuration & Dependencies ---
+pyproject.toml
+requirements.txt
+
+# The production configuration in the root points to /data, is private, but we have this general example config.
+rb_expert.example.toml
+.gitignore
+
+### --- 3. Core Schema & Models (The "What") ---
+# env.py is critical as it defines the configuration schema
+src/env.py
+src/models.py
+
+### --- 4. Core Logic (The "How") ---
+src/database.py
+src/data_prep.py
+src/indexing.py
+src/context.py
+src/llm.py
+src/engine.py
+
+### --- 5. User Interfaces (The "Where") ---
+apps/answer_generator.py
+apps/search_explorer.py
+
+### --- 6. Testing Infrastructure ---
+# conftest.py is CRITICAL for understanding test fixtures
+tests/conftest.py
+
+# The test configuration points to the fixtures
+tests/fixtures/test_env.toml
+
+### --- 7. Unit & Integration Tests ---
+tests/test_env.py
+tests/test_models.py
+tests/test_data_prep.py
+tests/test_database.py
+tests/test_indexing.py
+tests/test_retrieval.py
+tests/test_reranking.py
+tests/test_context.py
+tests/test_engine.py
+tests/test_llm.py
+
+### --- 8. Sample Data (Contextual Grounding) ---
+# Restricted test corpus (32 talks from Practicing the Jhanas)
+tests/fixtures/data/metadata.json
+
+# Just one talk to give a good example of the corpus
+tests/fixtures/data/raw_talks/2020-01-08-going-forwards.md
+
+# Do **not** include production, neither metatadata nor the corpus
+# data/raw_talks/metadata.json
+
+### --- 9. Tooling ---
+tools/concat_files.py
