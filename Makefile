@@ -170,7 +170,7 @@ killollama: ## Kill the running Ollama server
 
 # --- Utility Targets ---
 
-cpmanifest: $(SETUP_STAMP) ## next filesdump will contain what manifest says
+cpmanifest: $(SETUP_STAMP) ## next make filesdump )will contain what manifest says
 	cp manifest.lst tmp/filesdump.lst
 
 filesdump: $(SETUP_STAMP) gentree ## Create context dump for LLMs
