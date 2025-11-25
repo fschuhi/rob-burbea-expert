@@ -37,7 +37,7 @@ graph LR
 | **ChromaDB** | Vector store with deterministic metadata + ID handling. |
 | **Reranker** | **Cross-Encoder** (MS MARCO) that deeply scores candidates to fix ranking errors. |
 | **Context Builder** | Assembles paragraphs and maps them to Reference IDs `[1]`, `[2]`. |
-| **Ollama** | Runs local LLMs (tested: `dolphin-mistral`, `gemma3n-abliterated`). |
+| **Ollama** | Runs local LLMs with runtime model selection. |
 
 ---
 
@@ -136,8 +136,9 @@ make filesdump      # Create context dump for LLMs
 | Answer Generator App | ✅ |
 | **Granular UI Feedback** | ✅ |
 | Footnote Citations | ✅ |
+| **Dynamic Model Selection** | ✅ |
 
-**All 43 tests passing** ✅
+**All 51 tests passing** ✅
 
 > **Note:** For the future roadmap and planned features, please refer to [`Goals.md`](Goals.md) and [`TODO.md`](TODO.md).
 
@@ -153,6 +154,7 @@ make chat
 ```
 
 **Features:**
+- **Dynamic Model Selection**: Switch between any Ollama model on the fly—no restart required.
 - **Reranker-Powered**: Distinguishes subtle concepts (e.g., "First Jhana" vs. "Third Jhana").
 - **Live Streaming**: Watch the answer type out in real-time.
 - **Granular Status**: See exactly what the engine is doing ("Retrieval...", "First Token...").

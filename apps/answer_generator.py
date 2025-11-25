@@ -13,14 +13,12 @@ Usage:
     make chat
 """
 
+import streamlit as st
 import re
 import time
-
-import streamlit as st
-
-from src.database import reconstruct_paragraph_with_hit
-from src.engine import RAGEngine
 from src.env import load_env
+from src.engine import RAGEngine
+from src.database import reconstruct_paragraph_with_hit
 from src.ollama_utils import list_ollama_models
 
 
@@ -125,6 +123,17 @@ def main():
         section[data-testid="stSidebar"] h1 {
             font-size: 1.2rem;
             margin-bottom: 0.5rem;
+        }
+
+        /* Tighter horizontal dividers in sidebar */
+        section[data-testid="stSidebar"] hr {
+            margin-top: 0.5rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+
+        /* Tighter spacing for consecutive markdown elements in sidebar */
+        section[data-testid="stSidebar"] .stMarkdown {
+            margin-bottom: 0.25rem;
         }
         </style>
     """,

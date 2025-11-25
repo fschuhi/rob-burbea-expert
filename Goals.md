@@ -4,17 +4,6 @@ Strategic work that shapes capabilities and architecture. Each goal has intent, 
 
 ---
 
-## Live Wire (Dynamic Ollama Models)
-- **Intent**: Call `ollama list` at runtime to populate available LLMs, cache them, and expose to the UI.
-- **Why it matters**: Keeps the "Menu" selector in sync with the actual local models without hand-editing the config.
-- **Definition of done**: Backend utility that returns model metadata; error handling for offline/no-Ollama scenarios; unit coverage with mocks.
-
-## The Menu (Model Selector UI)
-- in conjunction with Live Wire
-- **Intent**: Add a sidebar selector in both apps that lets the user switch the active LLM without restarting.
-- **Why it matters**: Enables on-the-fly experimentation with different models (stateless per request).
-- **Definition of done**: UI control wired into `OllamaClient` (or a lightweight wrapper) so each query uses the currently selected model.
-
 ## Model Selection
 - **Intent**: Systematically evaluate candidate base models (e.g., dolphin-mistral, gemma3n-abliterated, qwen variants) to identify the best default for the Expert.
 - **Why it matters**: The LLM determines answer quality, tone, instruction-following, and citation accuracy. This choice shapes everything downstream, including prompt design.
