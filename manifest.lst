@@ -65,3 +65,14 @@ tests/fixtures/data/raw_talks/2020-01-08-going-forwards.md
 
 ### --- 9. Tooling ---
 tools/concat_files.py
+
+### --- 10. Model evaluation ---
+# evaluation/probe_questions.xml
+
+### --- 11. Documentation ---
+# docs/chunking.md
+# docs/embeddings.md
+# docs/evaluation.md
+# docs/llm-layer.md
+# docs/prompt-engineering.md
+# docs/reranking.md
