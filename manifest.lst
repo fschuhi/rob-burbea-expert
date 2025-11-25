@@ -31,6 +31,7 @@ src/engine.py
 src/indexing.py
 src/llm.py
 src/ollama_utils.py
+src/telemetry.py
 
 ### --- 5. User Interfaces (The "Where") ---
 apps/answer_generator.py
@@ -56,6 +57,7 @@ tests/test_models.py
 tests/test_ollama_utils.py
 tests/test_reranking.py
 tests/test_retrieval.py
+tests/test_telemetry.py
 
 ### --- 8. Sample Data (Contextual Grounding) ---
 # Restricted test corpus (32 talks from Practicing the Jhanas)
