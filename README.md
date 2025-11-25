@@ -39,6 +39,33 @@ graph LR
 | **Context Builder** | Assembles paragraphs and maps them to Reference IDs `[1]`, `[2]`. |
 | **Ollama** | Runs local LLMs with runtime model selection. |
 
+### Backend Modules
+
+| Module | Purpose |
+|--------|---------|
+| `src/env.py` | Configuration schema and validation |
+| `src/models.py` | Embedding function wrappers |
+| `src/database.py` | ChromaDB persistence layer |
+| `src/context.py` | Context assembly and formatting |
+| `src/engine.py` | RAG orchestration (retrieve → rerank → context) |
+| `src/llm.py` | Ollama client for streaming responses |
+| `src/citations.py` | Citation parsing and formatting |
+| `src/telemetry.py` | Performance tracking and metrics |
+| `src/data_prep.py` | Document loading and chunking |
+| `src/indexing.py` | Database building pipeline |
+| `src/ollama_utils.py` | Model discovery and validation |
+
+### Applications
+
+- **`apps/answer_generator.py`** - Chat interface with streaming, citations, telemetry
+- **`apps/search_explorer.py`** - Search results inspector with reranking comparison
+
+### Testing
+
+- **71 tests** covering unit, integration, and end-to-end scenarios
+- Test fixtures in `tests/fixtures/` with sample corpus
+- ChromaDB test database in `tmp/` (gitignored)
+
 ---
 
 ## Project Navigation & Context
