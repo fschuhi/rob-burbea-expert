@@ -11,13 +11,14 @@ Usage:
     make app
 """
 
-import streamlit as st
-import markdown
 from pathlib import Path
 
-from src.env import load_env
-from src.engine import RAGEngine
+import markdown
+import streamlit as st
+
 from src.database import reconstruct_paragraph_with_hit
+from src.engine import RAGEngine
+from src.env import load_env
 
 
 @st.cache_resource

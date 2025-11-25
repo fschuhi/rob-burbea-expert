@@ -79,3 +79,4 @@ tools/ollama_list.py
 # docs/llm-layer.md
 # docs/prompt-engineering.md
 # docs/reranking.md
+# docs/streamlit.md
