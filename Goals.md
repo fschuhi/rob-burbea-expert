@@ -2,17 +2,19 @@
 
 Strategic work that shapes capabilities and architecture. Each goal has intent, rationale, and definition of done. See also [`TODO.md`](TODO.md) for tactical quick-wins.
 
----
+> **Implementation guidance:** See [`REFACTORING.md`](REFACTORING.md) for the architectural roadmap behind the top two priorities (Cohesive Context and Engine Workflow Simplification).
 
-## Engine Workflow Simplification
-- **Intent**: Refactor `RAGEngine.retrieve_and_rerank` into smaller steps (retrieve, filter, score, build context) without changing behavior.
-- **Why it matters**: Improves testability, prepares for backend reuse, and clarifies the boundary between core logic and presentation.
-- **Definition of done**: Each stage has unit coverage; method reads as a high-level orchestration.
+---
 
 ## Cohesive Context
 - **Intent**: Move paragraph reconstruction helpers (`get_paragraph_chunks`, `reconstruct_paragraph_with_hit`) out of `src/database.py` into `src/context.py`, so all context-assembly logic lives together.
 - **Why it matters**: Streamlit apps, tests, and future backends can rely on a single module for context formatting, reducing cross-module dependencies.
 - **Definition of done**: Database layer keeps only persistence helpers; context builder exposes reconstruction utilities with updated imports/tests.
+
+## Engine Workflow Simplification
+- **Intent**: Refactor `RAGEngine.retrieve_and_rerank` into smaller steps (retrieve, filter, score, build context) without changing behavior.
+- **Why it matters**: Improves testability, prepares for backend reuse, and clarifies the boundary between core logic and presentation.
+- **Definition of done**: Each stage has unit coverage; method reads as a high-level orchestration.
 
 ## Model Selection
 - **Intent**: Systematically evaluate candidate base models (e.g., dolphin-mistral, gemma3n-abliterated, qwen variants) to identify the best default for the Expert.
@@ -79,7 +81,7 @@ Strategic work that shapes capabilities and architecture. Each goal has intent, 
 - **Why it matters**: Sentence-aware chunks should improve semantic cohesion and retrieval precision. Lower priority than tuning chunk_size/overlap via config, which require no code changes.
 - **Definition of done**: Config option selects sentence splitter; tests cover both manual and new splitter; benchmarking notes captured.
 
-## Alternative UI Prototype
+## Future: Alternative UI Prototype
 - **Intent**: Experiment with a non-Streamlit front end (e.g., textual, CLI, or lightweight web framework) reusing the carved-out backend helpers.
-- **Why it matters**: Validates that the backend boundaries are clean and offers options if Streamlit becomes limiting.
+- **Status**: Deferred - Streamlit is working well for current use case. Revisit if UI framework becomes limiting.
 - **Definition of done**: Minimal prototype demonstrating query→answer flow via the shared backend.

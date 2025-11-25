@@ -8,8 +8,8 @@ The `README.md` gives you some info on where we are at the moment. Refer to the 
 
 All tests pass.
 
-`Goals.md` and `TODO.md` show you the potential directions we can take together in this conversation.
+`Goals.md` shows strategic priorities. The top two goals (Cohesive Context and Engine Workflow Simplification) have detailed implementation guidance in `REFACTORING.md`. `TODO.md` lists tactical quick-wins.
 
 Please acknowledge that you understand the grand plan and the current functionality.
 
-After that, let's discuss the next small step which we can take together. I suggest we implement the first topic on the `TODO.md`. Please ask questions if you need further information, I like the back-and-forth with you.
+After that, let's discuss implementing the first goal from `Goals.md`. Please ask questions if you need further information, I like the back-and-forth with you.

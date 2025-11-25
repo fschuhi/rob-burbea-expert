@@ -165,7 +165,7 @@ make filesdump      # Create context dump for LLMs
 | Footnote Citations | ✅ |
 | **Dynamic Model Selection** | ✅ |
 
-**All 71 tests passing** ✅
+**All 85 tests passing** ✅
 
 > **Note:** For the future roadmap and planned features, please refer to [`Goals.md`](Goals.md) and [`TODO.md`](TODO.md).
 
