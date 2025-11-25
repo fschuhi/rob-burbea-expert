@@ -28,20 +28,20 @@ I frequently switch between different AI models (Gemini, Claude, ChatGPT).
 1.  **Source of Truth**: The "filesdump" (a concatenated text file of the project) I provide is the absolute source of truth. Do not rely on training data about how *similar* projects work. Rely on *my* code.
 2.  **Parsing the Filesdump**: The project context is provided as a single XML-formatted block. Files are wrapped in `<document path="path/to/file">` tags. You must parse this structure to understand the filesystem.
 3.  **Makefile Awareness**: Always check the `Makefile` (if provided) to understand the current build, test, and run commands. Use these targets in your instructions.
-4.  **manifest.lst*:: This file (included in the filesdump) lists the relevant files for the project, grouped, with additional comments.
-4.  **README.me**: The `README.md` file explains how everything hangs together from a bird's eye view.
-5.  **TODO.md**: We capture or shelf topics for later using this file. Feel free to suggest additions or changes at any time.
-6.  **Goals.md**: Whereas `TODO.md` is more of a scratchpad, `Goals.md` helps to show the direction we are working towards right now.
+4.  **manifest.lst**: This file (included in the filesdump) lists the relevant files for the project, grouped, with additional comments.
+5.  **[`README.md`](README.md)**: Explains how everything hangs together from a bird's eye view.
+6.  **[`TODO.md`](TODO.md)**: We capture or shelf topics for later using this file. Feel free to suggest additions or changes at any time.
+7.  **[`Goals.md`](Goals.md)**: Whereas [`TODO.md`](TODO.md) is more of a scratchpad, [`Goals.md`](Goals.md) helps to show the direction we are working towards right now.
 
 ## How to start this session / conversation
 
-* If I haven't told you otherwise, the first entries in `Goals.md` are probably indicative of where I want to go with you in this conversation.
-* The `TODO.md` collects those and more topics and ideas as a scratchpad.
-* Files like `README.md` describe the current state of the project. Note that this can be out of sync with the reality of the codebase. Still, the general thrust of this project might become clear from looking at what we have, like the `README.md`.
+* If I haven't told you otherwise, the first entries in [`Goals.md`](Goals.md) are probably indicative of where I want to go with you in this conversation.
+* The [`TODO.md`](TODO.md) collects those and more topics and ideas as a scratchpad.
+* Files like [`README.md`](README.md) describe the current state of the project. Note that this can be out of sync with the reality of the codebase. Still, the general thrust of this project might become clear from looking at what we have, like the [`README.md`](README.md).
 
-I'm always interested to find quick wins. If you identify inconsistencies (like `README.md` out of sync) you can at any time, also in the beginning of the conversation, suggest to streamline the project in this regard.
+I'm always interested to find quick wins. If you identify inconsistencies (like [`README.md`](README.md) out of sync) you can at any time, also in the beginning of the conversation, suggest to streamline the project in this regard.
 
-Feel free to make a suggestion how to start, given the explicit and implicit information in the projet files.
+Feel free to make a suggestion how to start, given the explicit and implicit information in the project files.
 
 ## Memory and Conversation Boundaries
 
@@ -83,7 +83,7 @@ Do not reinvent the wheel. I prefer using established, well-maintained external 
 ## Markdown Output Convention
 
 When I request markdown, wrap the entire response once inside a single set of triple backticks.
-Inside that block, replace every other triple-backtick fence with ''' (three single quotes) so the frontend doesn’t prematurely close the block, and explicitly remind me that I’ll convert those ''' back to ``` after pasting.
+Inside that block, replace every other triple-backtick fence with ''' (three single quotes) so the frontend doesn't prematurely close the block, and explicitly remind me that I'll convert those ''' back to ``` after pasting.
 
 ## Workflow Pattern
 

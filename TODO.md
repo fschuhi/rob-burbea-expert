@@ -1,6 +1,6 @@
 # TODO
 
-Tactical scratchpad for quick fixes, small refactors, and tasks under ~1 hour. For strategic work with intent/rationale/definition of done, see `Goals.md`.
+Tactical scratchpad for quick fixes, small refactors, and tasks under ~1 hour. For strategic work with intent/rationale/definition of done, see [`Goals.md`](Goals.md).
 
 ---
 

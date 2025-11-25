@@ -1,6 +1,6 @@
 # Goals
 
-Strategic work that shapes capabilities and architecture. Each goal has intent, rationale, and definition of done. See also `TODO.md` for tactical quick-wins.
+Strategic work that shapes capabilities and architecture. Each goal has intent, rationale, and definition of done. See also [`TODO.md`](TODO.md) for tactical quick-wins.
 
 ---
 
