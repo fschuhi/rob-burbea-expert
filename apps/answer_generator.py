@@ -14,12 +14,12 @@ Usage:
 """
 
 import streamlit as st
-import re
 import time
 from src.env import load_env
 from src.engine import RAGEngine
 from src.database import reconstruct_paragraph_with_hit
 from src.ollama_utils import list_ollama_models
+from src.citations import resolve_references, ensure_bold_citations
 
 
 @st.cache_resource
@@ -27,37 +27,6 @@ def get_engine():
     """Initialize the RAG Engine (cached)."""
     env = load_env()
     return RAGEngine(env)
-
-
-def resolve_references(text: str) -> list[int]:
-    """Robustly parses citation tags like [1], [1, 2] from the text."""
-    raw_matches = re.findall(r"\[([\d,\s\-]+)\]", text)
-    unique_ids = set()
-
-    for match in raw_matches:
-        parts = match.split(",")
-        for part in parts:
-            part = part.strip()
-            if "-" in part:
-                try:
-                    start, end = map(int, part.split("-"))
-                    if end - start < 20:
-                        unique_ids.update(range(start, end + 1))
-                except ValueError:
-                    continue
-            else:
-                try:
-                    unique_ids.add(int(part))
-                except ValueError:
-                    continue
-
-    return sorted(list(unique_ids))
-
-
-def ensure_bold_citations(text: str) -> str:
-    """Wraps citation tags [N] in bold markers if not already bold."""
-    # Replace [N] with **[N]** unless already bold
-    return re.sub(r"(?<!\*\*)\[(\d+)\](?!\*\*)", r"**[\1]**", text)
 
 
 def render_telemetry_box(container, telemetry: dict, final: bool = False):

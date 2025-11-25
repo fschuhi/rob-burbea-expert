@@ -23,6 +23,7 @@ src/env.py
 src/models.py
 
 ### --- 4. Core Logic (The "How") ---
+src/citations.py
 src/context.py
 src/data_prep.py
 src/database.py
@@ -43,6 +44,7 @@ tests/conftest.py
 tests/fixtures/test_env.toml
 
 ### --- 7. Unit & Integration Tests ---
+tests/test_citations.py
 tests/test_context.py
 tests/test_data_prep.py
 tests/test_database.py
