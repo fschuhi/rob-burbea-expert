@@ -14,12 +14,12 @@ Usage:
 """
 
 import streamlit as st
-import time
 from src.env import load_env
 from src.engine import RAGEngine
 from src.database import reconstruct_paragraph_with_hit
 from src.ollama_utils import list_ollama_models
 from src.citations import resolve_references, ensure_bold_citations
+from src.telemetry import QueryTelemetry
 
 
 @st.cache_resource
@@ -32,17 +32,22 @@ def get_engine():
 def render_telemetry_box(container, telemetry: dict, final: bool = False):
     """
     Renders the metrics as a clean, vertical log list.
+
+    Args:
+        container: Streamlit container to render into
+        telemetry: Dictionary from QueryTelemetry.to_dict()
+        final: Whether this is the final render (includes generation metrics)
     """
     if not telemetry:
         return
 
     retrieval = telemetry.get("retrieval", 0.0)
     ttft = telemetry.get("ttft", 0.0)
-    reranker_status = telemetry.get("reranker_status", True)
+    reranker_status = telemetry.get("reranker", True)
 
     if final:
-        total_wall = telemetry.get("total_wall", 0.0)
-        header = f"⏱️ Finished in {total_wall:.2f}s"
+        total_time = telemetry.get("total_time", 0.0)
+        header = f"⏱️ Finished in {total_time:.2f}s"
     else:
         header = "⏱️ Processing..."
 
@@ -54,9 +59,9 @@ def render_telemetry_box(container, telemetry: dict, final: bool = False):
     lines.append(f"**Time to First Token:** `{ttft:.2f}s`")
 
     if final:
-        total_gen = telemetry.get("total_gen", 0.0)
+        generation = telemetry.get("generation", 0.0)
         speed = telemetry.get("speed", 0.0)
-        lines.append(f"**Full Generation:** `{total_gen:.2f}s`")
+        lines.append(f"**Full Generation:** `{generation:.2f}s`")
         lines.append(f"**Speed:** `{speed:.1f} words/s`")
 
     content = "  \n".join(lines)
@@ -268,15 +273,16 @@ def main():
             references_map = {}
             used_ids = []
             stream = None
-            telemetry = {}
 
-            t_start_total = time.time()
+            # Initialize telemetry
+            telemetry = QueryTelemetry()
+            telemetry.start_query()
 
             # --- PHASE 1: PROCESSING (Spinner) ---
             with st.spinner("🧠 Thinking..."):
                 try:
                     # 1. Retrieval
-                    t0 = time.time()
+                    telemetry.start_phase("retrieval")
                     context_str, references_map = engine.retrieve_and_rerank(
                         final_prompt,
                         top_k=top_k,
@@ -284,19 +290,17 @@ def main():
                         retrieval_pool_size=retrieval_pool,
                         apply_reranker=apply_reranker,
                     )
-                    t1 = time.time()
-                    telemetry["retrieval"] = t1 - t0
-                    telemetry["reranker_status"] = apply_reranker
+                    telemetry.end_phase("retrieval", metadata={"reranker": apply_reranker})
 
                     # 2. Connection - PASS SELECTED MODEL
+                    telemetry.start_phase("llm_connection")
                     stream = engine.llm_client.stream_answer(
                         query=final_prompt, context=context_str, model_name=selected_model
                     )
 
                     # 3. First Token
                     first_chunk = next(stream)
-                    t2 = time.time()
-                    telemetry["ttft"] = t2 - t1
+                    telemetry.mark_ttft()
 
                 except StopIteration:
                     st.error("LLM returned empty response.")
@@ -308,7 +312,7 @@ def main():
             # --- PHASE 2: RENDERING ---
 
             # A. Initial Telemetry
-            render_telemetry_box(telemetry_box, telemetry, final=False)
+            render_telemetry_box(telemetry_box, telemetry.to_dict(), final=False)
 
             # B. Stream (with citation bolding)
             full_response += first_chunk
@@ -321,17 +325,10 @@ def main():
             answer_box.markdown(ensure_bold_citations(full_response))
 
             # --- PHASE 3: FINAL METRICS ---
-            t_end_total = time.time()
+            telemetry.calculate_generation_metrics(full_response)
 
-            gen_time = t_end_total - t2
-            word_count = len(full_response.split())
-            speed = word_count / gen_time if gen_time > 0 else 0
-
-            telemetry["total_gen"] = gen_time
-            telemetry["speed"] = speed
-            telemetry["total_wall"] = t_end_total - t_start_total
-
-            render_telemetry_box(telemetry_box, telemetry, final=True)
+            final_metrics = telemetry.to_dict()
+            render_telemetry_box(telemetry_box, final_metrics, final=True)
 
             used_ids = resolve_references(full_response)
 
@@ -342,7 +339,7 @@ def main():
                 "content": full_response,
                 "references_map": references_map,
                 "citations": used_ids,
-                "telemetry": telemetry,
+                "telemetry": final_metrics,
             }
         )
         st.rerun()

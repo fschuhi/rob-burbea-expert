@@ -6,19 +6,20 @@ Features:
 - Inspect Reranked Results (Score-based)
 - Toggle between the two views to "debug" the Reranker's impact
 - Production Environment Loading
+- Performance Telemetry
 
 Usage:
     make app
 """
 
+import streamlit as st
+import markdown
 from pathlib import Path
 
-import markdown
-import streamlit as st
-
-from src.database import reconstruct_paragraph_with_hit
-from src.engine import RAGEngine
 from src.env import load_env
+from src.engine import RAGEngine
+from src.database import reconstruct_paragraph_with_hit
+from src.telemetry import QueryTelemetry
 
 
 @st.cache_resource
@@ -162,9 +163,15 @@ def main():
         st.session_state.search_query = query
 
     if query:
+        # Initialize telemetry
+        telemetry = QueryTelemetry()
+        telemetry.start_query()
+
         with st.spinner("Searching..."):
             # 1. RAW RETRIEVAL
+            telemetry.start_phase("retrieval")
             results = collection.query(query_texts=[query], n_results=n_results)
+            telemetry.end_phase("retrieval")
 
         if not results["ids"]:
             st.warning("No results found.")
@@ -192,6 +199,7 @@ def main():
         # 2. OPTIONAL RERANKING
         if use_reranker:
             with st.spinner("Reranking..."):
+                telemetry.start_phase("reranking")
                 pairs = [[query, c["document"]] for c in candidates]
                 scores = engine.cross_encoder.predict(pairs)
 
@@ -200,12 +208,27 @@ def main():
 
                 # Sort by Score (Descending)
                 candidates.sort(key=lambda x: x["rank_score"], reverse=True)
+                telemetry.end_phase("reranking", metadata={"reranker": True})
         else:
             # Keep DB order (Distance Ascending)
             pass
 
-        # 3. DISPLAY LOOP
-        st.markdown(f"Showing **{len(candidates)}** chunks")
+        # 3. DISPLAY METRICS & RESULTS
+        metrics = telemetry.to_dict()
+
+        # Show telemetry in a compact info box
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"Showing **{len(candidates)}** chunks")
+        with col2:
+            if use_reranker:
+                rerank_time = metrics.get("reranking", 0.0)
+                total_time = metrics.get("retrieval", 0.0) + rerank_time
+                st.caption(f"⏱️ {total_time:.3f}s (rerank: {rerank_time:.3f}s)")
+            else:
+                retrieval_time = metrics.get("retrieval", 0.0)
+                st.caption(f"⏱️ {retrieval_time:.3f}s")
+
         st.markdown("---")
 
         for idx, result in enumerate(candidates, start=1):
