@@ -7,6 +7,7 @@ Features:
 - Telemetry: Vertical "Log Style" List in Expander
 - Cinematic Wide Layout
 - Footnote Citation System
+- Dynamic Model Selection
 
 Usage:
     make chat
@@ -18,6 +19,7 @@ import time
 from src.env import load_env
 from src.engine import RAGEngine
 from src.database import reconstruct_paragraph_with_hit
+from src.ollama_utils import list_ollama_models
 
 
 @st.cache_resource
@@ -50,6 +52,12 @@ def resolve_references(text: str) -> list[int]:
                     continue
 
     return sorted(list(unique_ids))
+
+
+def ensure_bold_citations(text: str) -> str:
+    """Wraps citation tags [N] in bold markers if not already bold."""
+    # Replace [N] with **[N]** unless already bold
+    return re.sub(r"(?<!\*\*)\[(\d+)\](?!\*\*)", r"**[\1]**", text)
 
 
 def render_telemetry_box(container, telemetry: dict, final: bool = False):
@@ -116,6 +124,17 @@ def main():
             font-size: 1.2rem;
             margin-bottom: 0.5rem;
         }
+
+        /* Tighter horizontal dividers in sidebar */
+        section[data-testid="stSidebar"] hr {
+            margin-top: 0.5rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+
+        /* Tighter spacing for consecutive markdown elements in sidebar */
+        section[data-testid="stSidebar"] .stMarkdown {
+            margin-bottom: 0.25rem;
+        }
         </style>
     """,
         unsafe_allow_html=True,
@@ -138,18 +157,43 @@ def main():
         st.header("⚙️ Settings")
         st.metric("Database", "Rob Burbea Talks")
 
-        # MODEL STACK (Compact & Styled like Search Explorer)
-        # We use markdown to mimic the "Label: Value" look with green highlighting
+        # MODEL SELECTION
+        st.markdown("---")
+        st.header("🤖 Model Selection")
 
-        # Clean up model names
+        model_info = list_ollama_models(base_url=engine.env.ollama.base_url, timeout=engine.env.ollama.timeout)
+
+        if not model_info["available"]:
+            st.error(f"⚠️ {model_info['error']}")
+            st.stop()
+
+        if not model_info["models"]:
+            st.warning("No models found. Pull models with `ollama pull <model>`")
+            st.stop()
+
+        model_names = [m["name"] for m in model_info["models"]]
+
+        # Default to config value if it exists in list
+        default_idx = 0
+        if engine.env.models.default_llm_model in model_names:
+            default_idx = model_names.index(engine.env.models.default_llm_model)
+
+        selected_model = st.selectbox(
+            "Active LLM", options=model_names, index=default_idx, help="Select which Ollama model to use for generation"
+        )
+
+        # Show model details
+        selected_model_info = next(m for m in model_info["models"] if m["name"] == selected_model)
+        st.caption(f"**Family:** {selected_model_info['family']} | **Size:** {selected_model_info['size_gb']} GB")
+
+        # MODEL STACK
+        st.markdown("---")
         reranker_clean = engine.env.models.reranker_model.replace("cross-encoder/", "")
-
-        st.markdown(f"**LLM:** `{engine.env.models.default_llm_model}`")
         st.markdown(f"**Reranker:** `{reranker_clean}`")
         st.markdown(f"**Embedder:** `{engine.env.models.embedding_model}`")
 
         st.markdown("---")
-        st.header("🛠️ Tuning")  # Added header to match SE
+        st.header("🛠️ Tuning")
 
         top_k = st.slider(
             "Final Context Chunks", 1, 15, engine.env.rag.top_k_results, help="How many chunks to send to the LLM."
@@ -188,8 +232,8 @@ def main():
                 t_box = st.empty()
                 render_telemetry_box(t_box, msg["telemetry"], final=True)
 
-            # B. Render Content
-            st.markdown(msg["content"])
+            # B. Render Content (with citation bolding)
+            st.markdown(ensure_bold_citations(msg["content"]))
 
             # C. Render Citations
             if msg.get("citations"):
@@ -275,8 +319,10 @@ def main():
                     telemetry["retrieval"] = t1 - t0
                     telemetry["reranker_status"] = apply_reranker
 
-                    # 2. Connection
-                    stream = engine.llm_client.stream_answer(query=final_prompt, context=context_str)
+                    # 2. Connection - PASS SELECTED MODEL
+                    stream = engine.llm_client.stream_answer(
+                        query=final_prompt, context=context_str, model_name=selected_model
+                    )
 
                     # 3. First Token
                     first_chunk = next(stream)
@@ -295,15 +341,15 @@ def main():
             # A. Initial Telemetry
             render_telemetry_box(telemetry_box, telemetry, final=False)
 
-            # B. Stream
+            # B. Stream (with citation bolding)
             full_response += first_chunk
-            answer_box.markdown(full_response + "▌")
+            answer_box.markdown(ensure_bold_citations(full_response) + "▌")
 
             for chunk in stream:
                 full_response += chunk
-                answer_box.markdown(full_response + "▌")
+                answer_box.markdown(ensure_bold_citations(full_response) + "▌")
 
-            answer_box.markdown(full_response)
+            answer_box.markdown(ensure_bold_citations(full_response))
 
             # --- PHASE 3: FINAL METRICS ---
             t_end_total = time.time()

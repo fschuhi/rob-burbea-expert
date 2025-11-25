@@ -17,10 +17,17 @@ class OllamaClient:
         self.timeout = env.ollama.timeout
         self.client = ollama.Client(host=self.base_url, timeout=self.timeout)
 
-    def stream_answer(self, query: str, context: str) -> Iterator[str]:
+    def stream_answer(self, query: str, context: str, model_name: str | None = None) -> Iterator[str]:
         """
         Streams an answer from the LLM based on the user query and retrieved context.
+
+        Args:
+            query: User's question
+            context: Retrieved reference material
+            model_name: Optional model override. If None, uses self.model_name from config
         """
+        # Use provided model or fall back to default
+        effective_model = model_name if model_name is not None else self.model_name
 
         system_prompt = (
             "You are an expert teaching assistant for Rob Burbea's dharma talks. "
@@ -43,23 +50,17 @@ class OllamaClient:
         )
 
         messages = [
-            {
-                'role': 'system',
-                'content': system_prompt
-            },
-            {
-                'role': 'user',
-                'content': f"Reference Material:\n{context}\n\nQuestion:\n{query}"
-            }
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Reference Material:\n{context}\n\nQuestion:\n{query}"},
         ]
 
         stream = self.client.chat(
-            model=self.model_name,
+            model=effective_model,
             messages=messages,
             stream=True,
         )
 
         for chunk in stream:
-            content = chunk.get('message', {}).get('content', '')
+            content = chunk.get("message", {}).get("content", "")
             if content:
                 yield content

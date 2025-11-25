@@ -23,12 +23,13 @@ src/env.py
 src/models.py
 
 ### --- 4. Core Logic (The "How") ---
-src/database.py
-src/data_prep.py
-src/indexing.py
 src/context.py
-src/llm.py
+src/data_prep.py
+src/database.py
 src/engine.py
+src/indexing.py
+src/llm.py
+src/ollama_utils.py
 
 ### --- 5. User Interfaces (The "Where") ---
 apps/answer_generator.py
@@ -42,16 +43,17 @@ tests/conftest.py
 tests/fixtures/test_env.toml
 
 ### --- 7. Unit & Integration Tests ---
-tests/test_env.py
-tests/test_models.py
+tests/test_context.py
 tests/test_data_prep.py
 tests/test_database.py
-tests/test_indexing.py
-tests/test_retrieval.py
-tests/test_reranking.py
-tests/test_context.py
 tests/test_engine.py
+tests/test_env.py
+tests/test_indexing.py
 tests/test_llm.py
+tests/test_models.py
+tests/test_ollama_utils.py
+tests/test_reranking.py
+tests/test_retrieval.py
 
 ### --- 8. Sample Data (Contextual Grounding) ---
 # Restricted test corpus (32 talks from Practicing the Jhanas)
@@ -65,6 +67,7 @@ tests/fixtures/data/raw_talks/2020-01-08-going-forwards.md
 
 ### --- 9. Tooling ---
 tools/concat_files.py
+tools/ollama_list.py
 
 ### --- 10. Model evaluation ---
 # evaluation/probe_questions.xml

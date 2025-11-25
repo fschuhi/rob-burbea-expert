@@ -17,7 +17,6 @@ Tactical scratchpad for quick fixes, small refactors, and tasks under ~1 hour. F
 
 ### --- UI Polish ---
 
-- **AG Whitespace** - Remove excess whitespace from left pane in Answer Generator.
 - **Branding Beacon** - Replace the text title "Rob Burbea Talks" in the sidebar with a configurable image (e.g., Rob's photo or a logo) in both apps.
 
 ### --- Code Quality ---
