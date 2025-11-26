@@ -2,8 +2,6 @@
 
 Strategic work that shapes capabilities and architecture. Each goal has intent, rationale, and definition of done. See also [`TODO.md`](TODO.md) for tactical quick-wins.
 
-> **Implementation guidance:** See [`REFACTORING.md`](REFACTORING.md) for the architectural roadmap behind the top two priorities (Cohesive Context and Engine Workflow Simplification).
-
 ---
 
 ## Model Selection

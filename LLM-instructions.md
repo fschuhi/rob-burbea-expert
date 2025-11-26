@@ -35,7 +35,7 @@ I frequently switch between different AI models (Gemini, Claude, ChatGPT).
 
 ## Design Decisions
 
-Before proposing alternatives to an existing design (in Goals.md, REFACTORING.md, or discussion):
+Before proposing alternatives to an existing design (in Goals.md or discussion):
 
 1. **Check established patterns first**: Examine the codebase for conventions already in use.
 2. **Ground in this project**: Recommendations should fit the project's existing style, not abstract best practices.

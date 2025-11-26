@@ -8,7 +8,7 @@ The `README.md` gives you some info on where we are at the moment. Refer to the 
 
 All tests pass.
 
-`Goals.md` shows strategic priorities. The top two goals (Cohesive Context and Engine Workflow Simplification) have detailed implementation guidance in `REFACTORING.md`. `TODO.md` lists tactical quick-wins.
+`Goals.md` shows strategic priorities. `TODO.md` lists tactical quick-wins.
 
 Please acknowledge that you understand the grand plan and the current functionality.
 
