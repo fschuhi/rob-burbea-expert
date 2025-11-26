@@ -62,7 +62,7 @@ graph LR
 
 ### Testing
 
-- **71 tests** covering unit, integration, and end-to-end scenarios
+- **85 tests** covering unit, integration, and end-to-end scenarios
 - Test fixtures in `tests/fixtures/` with sample corpus
 - ChromaDB test database in `tmp/` (gitignored)
 

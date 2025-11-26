@@ -18,7 +18,7 @@ from pathlib import Path
 
 from src.env import load_env
 from src.engine import RAGEngine
-from src.database import reconstruct_paragraph_with_hit
+from src.context import reconstruct_paragraph_with_hit
 from src.telemetry import QueryTelemetry
 
 
