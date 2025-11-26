@@ -16,7 +16,7 @@ Usage:
 import streamlit as st
 from src.env import load_env
 from src.engine import RAGEngine
-from src.database import reconstruct_paragraph_with_hit
+from src.context import reconstruct_paragraph_with_hit
 from src.ollama_utils import list_ollama_models
 from src.citations import resolve_references, ensure_bold_citations
 from src.telemetry import QueryTelemetry

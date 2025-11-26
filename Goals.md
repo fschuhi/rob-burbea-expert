@@ -6,12 +6,7 @@ Strategic work that shapes capabilities and architecture. Each goal has intent, 
 
 ---
 
-## Cohesive Context
-- **Intent**: Move paragraph reconstruction helpers (`get_paragraph_chunks`, `reconstruct_paragraph_with_hit`) out of `src/database.py` into `src/context.py`, so all context-assembly logic lives together.
-- **Why it matters**: Streamlit apps, tests, and future backends can rely on a single module for context formatting, reducing cross-module dependencies.
-- **Definition of done**: Database layer keeps only persistence helpers; context builder exposes reconstruction utilities with updated imports/tests.
-
-## Engine Workflow Simplification
+from src.context import reconstruct_paragraph_with_hit## Engine Workflow Simplification
 - **Intent**: Refactor `RAGEngine.retrieve_and_rerank` into smaller steps (retrieve, filter, score, build context) without changing behavior.
 - **Why it matters**: Improves testability, prepares for backend reuse, and clarifies the boundary between core logic and presentation.
 - **Definition of done**: Each stage has unit coverage; method reads as a high-level orchestration.
