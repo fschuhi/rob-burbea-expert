@@ -33,7 +33,13 @@ I frequently switch between different AI models (Gemini, Claude, ChatGPT).
 6.  **[`TODO.md`](TODO.md)**: We capture or shelf topics for later using this file. Feel free to suggest additions or changes at any time.
 7.  **[`Goals.md`](Goals.md)**: Whereas [`TODO.md`](TODO.md) is more of a scratchpad, [`Goals.md`](Goals.md) helps to show the direction we are working towards right now.
 
-## How to start this session / conversation
+## Design Decisions
+
+Before proposing alternatives to an existing design (in Goals.md, REFACTORING.md, or discussion):
+
+1. **Check established patterns first**: Examine the codebase for conventions already in use.
+2. **Ground in this project**: Recommendations should fit the project's existing style, not abstract best practices.
+3. **Name the tension**: If a general principle conflicts with local convention, say so explicitly rather than defaulting to the general principle.
 
 * If I haven't told you otherwise, the first entries in [`Goals.md`](Goals.md) are probably indicative of where I want to go with you in this conversation.
 * The [`TODO.md`](TODO.md) collects those and more topics and ideas as a scratchpad.
@@ -82,8 +88,13 @@ Do not reinvent the wheel. I prefer using established, well-maintained external 
 
 ## Markdown Output Convention
 
-When I request markdown, wrap the entire response once inside a single set of triple backticks.
-Inside that block, replace every other triple-backtick fence with ''' (three single quotes) so the frontend doesn't prematurely close the block, and explicitly remind me that I'll convert those ''' back to ``` after pasting.
+When providing markdown content that contains code blocks (whether requested or as a drop-in replacement file):
+
+1. Wrap the entire response in a single set of triple backticks
+2. Inside that block, replace every triple-backtick fence with ''' (three single quotes)
+3. Remind me to convert ''' back to ``` after pasting
+
+This prevents the frontend from prematurely closing the outer code block.
 
 ## Workflow Pattern
 

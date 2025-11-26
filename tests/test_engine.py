@@ -51,6 +51,7 @@ def engine(test_env, populated_collection, mock_llm_client):
         engine = RAGEngine(test_env)
         engine.collection = populated_collection
         engine.context_builder.collection = populated_collection
+        engine.pipeline.collection = populated_collection
 
         return engine
 

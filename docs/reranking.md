@@ -20,11 +20,11 @@ The **cross-encoder** fixes this. It takes each (query, document) pair and score
 
 **Bi-Encoder (MiniLM)**
 
-```
+'''
 Query  → [Encoder] → Vector_Q ─┐
                                ├─→ Cosine Distance
 Doc    → [Encoder] → Vector_D ─┘
-```
+'''
 
 - Each text encoded once, independently
 - Vectors can be pre-computed and stored (your 5,008 chunks)
@@ -33,9 +33,9 @@ Doc    → [Encoder] → Vector_D ─┘
 
 **Cross-Encoder (MS MARCO)**
 
-```
+'''
 [Query + Doc] → [Full Transformer] → Relevance Score
-```
+'''
 
 - Query and document fed together as one input
 - Full attention across both texts
@@ -48,7 +48,35 @@ You can't pre-compute cross-encoder scores because they depend on the query. Tha
 
 ## Implementation in `engine.py`
 
-```python
+The retrieval logic is organized into two classes:
+
+**`RetrievalPipeline`** - The staged workflow:
+
+'''python
+class RetrievalPipeline:
+    """
+    Staged retrieval workflow with dependency injection.
+    """
+    def __init__(self, collection: Collection, cross_encoder: CrossEncoder):
+        self.collection = collection
+        self.cross_encoder = cross_encoder
+
+    def retrieve(self, query: str, n_results: int) -> List[Dict[str, Any]]:
+        """Stage 1: Vector search."""
+        ...
+
+    def filter_by_distance(self, candidates: List[Dict], threshold: float) -> List[Dict]:
+        """Stage 2: Distance filtering."""
+        ...
+
+    def score_candidates(self, query: str, candidates: List[Dict], use_reranker: bool) -> List[Dict]:
+        """Stage 3: Cross-encoder scoring or distance sort."""
+        ...
+'''
+
+**`RAGEngine`** - The orchestrator that owns the resources:
+
+'''python
 class RAGEngine:
     def __init__(self, env: Env):
         # Stage 1: Fast retrieval
@@ -61,9 +89,12 @@ class RAGEngine:
         # Stage 2: Precision reranking
         print(f"Loading Reranker: {env.models.reranker_model}...")
         self.cross_encoder = CrossEncoder(env.models.reranker_model)
-```
+        
+        # Pipeline (uses injected dependencies)
+        self.pipeline = RetrievalPipeline(self.collection, self.cross_encoder)
+'''
 
-The cross-encoder loads once at startup (~80MB model). It's small enough to keep in memory.
+The cross-encoder loads once at startup (~80MB model). The pipeline receives both dependencies via injection, making each stage independently testable.
 
 ---
 
@@ -73,62 +104,48 @@ From `retrieve_and_rerank()` with defaults: `top_k=5`, `retrieval_pool_size=25`,
 
 **Step 1: Broad vector search**
 
-```python
+'''python
 initial_k = pool_size if apply_reranker else final_top_k  # 25 if reranking
 
-results = self.collection.query(
-    query_texts=[query_text], 
-    n_results=initial_k
-)
-```
+candidates = self.pipeline.retrieve(query_text, initial_k)
+'''
 
-ChromaDB embeds the query, finds the 25 nearest vectors. Fast (~50ms).
+Inside `retrieve()`, ChromaDB embeds the query and finds the 25 nearest vectors. Fast (~50ms). Results are unpacked into candidate dicts with `id`, `text`, `metadata`, and `initial_dist`.
 
 **Step 2: Distance filtering**
 
-```python
-candidates = []
-for i in range(len(ids)):
-    if dists[i] <= final_threshold:  # 0.75
-        candidates.append({
-            "id": ids[i], 
-            "text": docs[i], 
-            "metadata": metas[i], 
-            "initial_dist": dists[i]
-        })
-```
+'''python
+candidates = self.pipeline.filter_by_distance(candidates, final_threshold)
+'''
 
 Some of the 25 might be too distant. This prunes obviously irrelevant results before the expensive reranking step.
 
 **Step 3: Cross-encoder scoring**
 
-```python
-if apply_reranker:
-    pairs = [[query_text, c["text"]] for c in candidates]
-    scores = self.cross_encoder.predict(pairs)
-    
-    for i, candidate in enumerate(candidates):
-        candidate["score"] = scores[i]
-    
-    # Higher score = more relevant
-    candidates.sort(key=lambda x: x["score"], reverse=True)
-```
+'''python
+candidates = self.pipeline.score_candidates(query_text, candidates, apply_reranker)
+'''
 
-This is the magic. The cross-encoder sees:
+Inside `score_candidates()`, when `use_reranker=True`:
 
-```
-["What is the third jhāna?", "The third jhāna is characterized by equanimity..."]
-["What is the third jhāna?", "In the third talk, I mentioned jhāna practice..."]
-```
+'''python
+pairs = [[query, c["text"]] for c in candidates]
+scores = self.cross_encoder.predict(pairs)
 
-And outputs scores like `[0.92, 0.31]`. The first is clearly answering the question. The second just happens to share words.
+for i, candidate in enumerate(candidates):
+    candidate["score"] = scores[i]
+
+candidates.sort(key=lambda x: x["score"], reverse=True)
+'''
+
+The cross-encoder sees each (query, chunk) pair and outputs relevance scores. Higher = more relevant. This is where the magic happens—the model attends across both texts simultaneously.
 
 **Step 4: Take the top K**
 
-```python
+'''python
 top_hits = candidates[:final_top_k]  # Best 5
 return self.context_builder.build_from_hits(top_hits)
-```
+'''
 
 From 25 candidates, you get the 5 that the cross-encoder judged most relevant.
 
@@ -211,8 +228,6 @@ On your M4 MacBook:
 
 The 500ms reranking is about 3-5% of your total query time. The LLM generation dominates. So the reranker is cheap relative to its benefit.
 
-**On GPU**, you could batch all 25 pairs and run them in parallel - maybe 50-100ms total. But your M4's Neural Engine isn't used by the `sentence-transformers` library; it runs on CPU.
-
 ---
 
 ## A Concrete Example
@@ -249,7 +264,7 @@ A reranker trained on "what Rob meant" would better distinguish nuanced contempl
 
 From `rb_expert.toml`:
 
-```toml
+'''toml
 [models]
 reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
@@ -257,6 +272,6 @@ reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 retrieval_pool_size = 25
 top_k_results = 5
 similarity_threshold = 0.75
-```
+'''
 
 To experiment: try `retrieval_pool_size = 15` (faster) or `40` (more thorough) and observe if answer quality changes.
