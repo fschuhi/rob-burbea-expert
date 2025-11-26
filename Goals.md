@@ -6,11 +6,6 @@ Strategic work that shapes capabilities and architecture. Each goal has intent, 
 
 ---
 
-## Engine Workflow Simplification
-- **Intent**: Refactor `RAGEngine.retrieve_and_rerank` into smaller steps (retrieve, filter, score, build context) without changing behavior.
-- **Why it matters**: Improves testability, prepares for backend reuse, and clarifies the boundary between core logic and presentation.
-- **Definition of done**: Each stage has unit coverage; method reads as a high-level orchestration.
-
 ## Model Selection
 - **Intent**: Systematically evaluate candidate base models (e.g., dolphin-mistral, gemma3n-abliterated, qwen variants) to identify the best default for the Expert.
 - **Why it matters**: The LLM determines answer quality, tone, instruction-following, and citation accuracy. This choice shapes everything downstream, including prompt design.
