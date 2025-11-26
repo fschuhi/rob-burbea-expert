@@ -6,7 +6,7 @@ Strategic work that shapes capabilities and architecture. Each goal has intent, 
 
 ---
 
-from src.context import reconstruct_paragraph_with_hit## Engine Workflow Simplification
+## Engine Workflow Simplification
 - **Intent**: Refactor `RAGEngine.retrieve_and_rerank` into smaller steps (retrieve, filter, score, build context) without changing behavior.
 - **Why it matters**: Improves testability, prepares for backend reuse, and clarifies the boundary between core logic and presentation.
 - **Definition of done**: Each stage has unit coverage; method reads as a high-level orchestration.
