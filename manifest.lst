@@ -1,6 +1,9 @@
 (This file is the basis of the filesdump in which it is included, i.e. the document you are reading right now. The files in the manifest are the relevant files for understanding how the project hangs together.)
 
 ### --- 1. Context & Meta ---
+# ⚠️ NON-NEGOTIABLE collaboration rules - READ FIRST
+CRITICAL_RULES.md
+
 LLM-instructions.md
 README.md
 manifest.lst
