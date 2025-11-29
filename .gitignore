@@ -66,7 +66,6 @@ sandbox/
 tmp/
 tests/baks/
 tests/tmp/
-files.lst
 filesdump.lst
 project-tree.txt
 
