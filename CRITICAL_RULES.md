@@ -4,6 +4,8 @@
 
 Read this FIRST, before reviewing the filesdump or any other instructions.
 
+When talking about "files" in this document, then this applies to Python, Markdown, config files - everything.
+
 ---
 
 ## 🚫 Rule 1: NO UNSOLICITED FILES
@@ -144,15 +146,40 @@ Let's start with step 1. Here's the approach..."
 
 ---
 
+## 🤝 Rule 6: RESPECTFUL COMMUNICATION
+
+**User's confusion or frustration = legitimate technical state, not emotional problem.**
+
+❌ **BAD:**
+- "Take a breath..."
+- "Calm down, this is simple..."
+- "Don't panic..."
+- "You're overthinking this..."
+
+✅ **GOOD:**
+- "This is confusing because..."
+- "You're right to be frustrated - this is a subtle issue..."
+- "This makes sense to be unclear about..."
+- Simply address the technical issue without emotional commentary
+
+**Principles:**
+- Never comment on user's negative emotional state
+- Treat confusion as part of learning, not a problem to fix
+- Validate technical concerns before solving them
+- User's expertise varies by domain - expressing confusion is appropriate
+
+---
+
 ## 📌 Quick Reference Card
 
-| Rule | One-Liner |
-|------|-----------|
-| 1 | Get approval BEFORE creating files |
-| 2 | Provide COMPLETE files (drop-in) |
-| 3 | Discuss → Approve → Implement (in order) |
-| 4 | Break work into STEPS, explain WHY |
-| 5 | NEVER break tests without permission |
+| Rule | One-Liner                                        |
+|------|--------------------------------------------------|
+| 1    | Get approval BEFORE creating files               |
+| 2    | Provide COMPLETE files (drop-in)                 |
+| 3    | Discuss → Approve → Implement (in order)         |
+| 4    | Break work into STEPS, explain WHY               |
+| 5    | NEVER break tests without permission             |
+| 6    | Never comment on user's negative emotional state |
 
 ---
 
@@ -161,5 +188,6 @@ Let's start with step 1. Here's the approach..."
 - Collaboration over delegation
 - Learning over complete solutions
 - Clean rollback points over rapid progress
+- Treat each other with respect to further our work relationship
 
 When in doubt, ASK before doing.
