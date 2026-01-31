@@ -15,10 +15,7 @@ class Document:
         self.metadata = metadata
 
     def __repr__(self):
-        return (
-            f"Document(source='{self.metadata.get('source')}', "
-            f"chars={len(self.page_content)})"
-        )
+        return f"Document(source='{self.metadata.get('source')}', " f"chars={len(self.page_content)})"
 
 
 def load_markdown_talks(talks_dir: Path) -> Iterator[tuple[str, Path]]:
@@ -35,12 +32,63 @@ def load_markdown_talks(talks_dir: Path) -> Iterator[tuple[str, Path]]:
         yield file_path.read_text(encoding="utf-8"), file_path
 
 
-def _split_text_with_overlap(
-        text: str,
-        chunk_size: int,
-        chunk_overlap: int,
-        separators: list[str]
-) -> list[str]:
+def _clean_transcription_noise(text: str) -> str:
+    """
+    Remove transcription artifacts that pollute chunking.
+
+    Removes:
+    - Timestamps: [28:02], [3:56], etc.
+    - Sound markers: [laughter], [inaudible], [applause], etc.
+    - Speaker markers: [yogi ...], [question], [response], etc.
+
+    Args:
+        text: Raw transcript text
+
+    Returns:
+        Cleaned text with noise removed and whitespace normalized
+
+    Examples:
+        >>> _clean_transcription_noise("Text [28:02] more text")
+        'Text more text'
+        >>> _clean_transcription_noise("Funny [laughter] joke")
+        'Funny joke'
+    """
+    # 1. Remove timestamps: [HH:MM] or [MM:SS]
+    # Pattern: [optional hours:]minutes:seconds
+    text = re.sub(r"\[\d{1,2}:\d{2}\]", "", text)
+
+    # 2. Remove common sound/speaker markers
+    # Case-insensitive, may have extra words inside
+    noise_patterns = [
+        r"\[laughter\]",
+        r"\[laughs\]",
+        r"\[inaudible\]",
+        r"\[inaudible in background\]",
+        r"\[yogi inaudible in background\]",
+        r"\[yogi inaudible\]",
+        r"\[applause\]",
+        r"\[silence\]",
+        r"\[pause\]",
+        r"\[bell\]",
+        r"\[question\]",
+        r"\[response\]",
+    ]
+
+    for pattern in noise_patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+
+    # 3. Normalize whitespace
+    # Replace multiple spaces with single space
+    text = re.sub(r" {2,}", " ", text)
+
+    # Replace multiple newlines with appropriate newlines
+    # (preserve paragraph breaks but remove excessive spacing)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text
+
+
+def _split_text_with_overlap(text: str, chunk_size: int, chunk_overlap: int, separators: list[str]) -> list[str]:
     """
     Manual text splitter that recursively tries separators.
 
@@ -92,9 +140,7 @@ def _split_text_with_overlap(
                 # Try next separator in the hierarchy
                 next_sep_idx = separators.index(sep) + 1
                 if next_sep_idx < len(separators):
-                    sub_chunks = _split_text_with_overlap(
-                        part, chunk_size, chunk_overlap, separators[next_sep_idx:]
-                    )
+                    sub_chunks = _split_text_with_overlap(part, chunk_size, chunk_overlap, separators[next_sep_idx:])
                     chunks.extend(sub_chunks)
                 else:
                     # No more separators, force split
@@ -132,11 +178,7 @@ def _split_text_with_overlap(
     return [text]
 
 
-def _split_with_manual_splitter(
-        text_content: str,
-        rag_config: RAG,
-        source_path: Path
-) -> Sequence[Document]:
+def _split_with_manual_splitter(text_content: str, rag_config: RAG, source_path: Path) -> Sequence[Document]:
     """
     Manual semantic-first splitter implementation with paragraph tracking.
 
@@ -146,12 +188,15 @@ def _split_with_manual_splitter(
 
     This is faster than langchain because it has no ML dependencies.
     """
+    # Phase 0: Clean transcription noise
+    text_content = _clean_transcription_noise(text_content)
+
     # Normalize line endings
-    clean_content = text_content.replace('\r\n', '\n').replace('\r', '\n')
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)
+    clean_content = text_content.replace("\r\n", "\n").replace("\r", "\n")
+    clean_content = re.sub(r"\n{3,}", "\n\n", clean_content)
 
     # Phase 1: Split on paragraphs
-    paragraphs = clean_content.split('\n\n')
+    paragraphs = clean_content.split("\n\n")
 
     # Phase 2: Process each paragraph with metadata tracking
     chunks: list[Document] = []
@@ -177,22 +222,24 @@ def _split_with_manual_splitter(
                 para_stripped,
                 rag_config.chunk_size,
                 rag_config.chunk_overlap,
-                ["\n", " ", ""]  # Try line breaks, then words, then characters
+                ["\n", " ", ""],  # Try line breaks, then words, then characters
             )
 
         # Create Document objects with paragraph metadata
         total_chunks = len(para_chunks)
         for chunk_position, chunk_text in enumerate(para_chunks):
             if chunk_text.strip():
-                chunks.append(Document(
-                    page_content=chunk_text.strip(),
-                    metadata={
-                        "source": str(source_path),
-                        "paragraph_index": paragraph_index,
-                        "chunk_position": chunk_position,
-                        "total_chunks_in_para": total_chunks
-                    }
-                ))
+                chunks.append(
+                    Document(
+                        page_content=chunk_text.strip(),
+                        metadata={
+                            "source": str(source_path),
+                            "paragraph_index": paragraph_index,
+                            "chunk_position": chunk_position,
+                            "total_chunks_in_para": total_chunks,
+                        },
+                    )
+                )
 
         # Increment paragraph index only for non-skipped paragraphs
         paragraph_index += 1
@@ -200,11 +247,7 @@ def _split_with_manual_splitter(
     return chunks
 
 
-def _split_with_langchain(
-        text_content: str,
-        rag_config: RAG,
-        source_path: Path
-) -> Sequence[Document]:
+def _split_with_langchain(text_content: str, rag_config: RAG, source_path: Path) -> Sequence[Document]:
     """
     Langchain-based splitter (slower due to ML library imports) with paragraph tracking.
 
@@ -213,12 +256,15 @@ def _split_with_langchain(
     # Lazy import to avoid loading heavy dependencies unless needed
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+    # Phase 0: Clean transcription noise
+    text_content = _clean_transcription_noise(text_content)
+
     # Normalize line endings
-    clean_content = text_content.replace('\r\n', '\n').replace('\r', '\n')
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)
+    clean_content = text_content.replace("\r\n", "\n").replace("\r", "\n")
+    clean_content = re.sub(r"\n{3,}", "\n\n", clean_content)
 
     # Phase 1: Split on paragraphs
-    paragraphs = clean_content.split('\n\n')
+    paragraphs = clean_content.split("\n\n")
 
     # Phase 2: Prepare splitter for oversized paragraphs
     text_splitter = RecursiveCharacterTextSplitter(
@@ -226,7 +272,7 @@ def _split_with_langchain(
         chunk_overlap=rag_config.chunk_overlap,
         separators=["\n", " ", ""],
         length_function=len,
-        is_separator_regex=False
+        is_separator_regex=False,
     )
 
     # Phase 3: Process each paragraph with metadata tracking
@@ -253,15 +299,17 @@ def _split_with_langchain(
         total_chunks = len(para_chunks)
         for chunk_position, chunk_text in enumerate(para_chunks):
             if chunk_text.strip():
-                chunks.append(Document(
-                    page_content=chunk_text.strip(),
-                    metadata={
-                        "source": str(source_path),
-                        "paragraph_index": paragraph_index,
-                        "chunk_position": chunk_position,
-                        "total_chunks_in_para": total_chunks
-                    }
-                ))
+                chunks.append(
+                    Document(
+                        page_content=chunk_text.strip(),
+                        metadata={
+                            "source": str(source_path),
+                            "paragraph_index": paragraph_index,
+                            "chunk_position": chunk_position,
+                            "total_chunks_in_para": total_chunks,
+                        },
+                    )
+                )
 
         # Increment paragraph index only for non-skipped paragraphs
         paragraph_index += 1
@@ -269,23 +317,20 @@ def _split_with_langchain(
     return chunks
 
 
-def split_documents(
-        text_content: str,
-        rag_config: RAG,
-        source_path: Path
-) -> Sequence[Document]:
+def split_documents(text_content: str, rag_config: RAG, source_path: Path) -> Sequence[Document]:
     """
     Splits a document using a semantic-first, two-phase approach with paragraph tracking.
 
     Strategy:
-    1. Normalize line endings (Windows CRLF → Unix LF)
-    2. Normalize excessive blank lines (3+ newlines → 2)
-    3. Split on paragraph boundaries (\\n\\n)
-    4. Skip "## Transcription" headers
-    5. For each paragraph:
+    1. Clean transcription noise (timestamps, sound markers)
+    2. Normalize line endings (Windows CRLF → Unix LF)
+    3. Normalize excessive blank lines (3+ newlines → 2)
+    4. Split on paragraph boundaries (\\n\\n)
+    5. Skip "## Transcription" headers
+    6. For each paragraph:
        - If ≤ chunk_size: keep as single chunk
        - If > chunk_size: split with overlap (respecting line/word boundaries)
-    6. Add paragraph metadata to each chunk
+    7. Add paragraph metadata to each chunk
 
     The implementation can use either:
     - Manual splitter (fast, no ML dependencies) - DEFAULT
@@ -331,11 +376,7 @@ def prepare_data_pipeline(env: Env) -> Sequence[Document]:
     print(f"Loading talks from: {env.paths.raw_talks_dir}")
 
     for content, path in load_markdown_talks(env.paths.raw_talks_dir):
-        all_documents.extend(split_documents(
-            text_content=content,
-            rag_config=env.rag,
-            source_path=path
-        ))
+        all_documents.extend(split_documents(text_content=content, rag_config=env.rag, source_path=path))
 
     print(f"Prepared {len(all_documents)} chunks.")
     return all_documents

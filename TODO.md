@@ -6,7 +6,7 @@ Tactical scratchpad for quick fixes, small refactors, and tasks under ~1 hour. F
 
 ### --- Data & Indexing ---
 
-- **Noise Reduction** - Filter out timestamps (e.g., `[28:02]`) and non-content markers (e.g., `[laughter]`, `[inaudible]`) during chunking in `data_prep.py` to prevent low-value "island" chunks.
+- ~~**Noise Reduction**~~ - ✅ **DONE** - Filter out timestamps (e.g., `[28:02]`) and non-content markers (e.g., `[laughter]`, `[inaudible]`) during chunking in `data_prep.py` to prevent low-value "island" chunks. Implemented in `_clean_transcription_noise()` with comprehensive tests.
 - **Complete Rob** - Prepare the full Rob Burbea dataset (all retreats) alongside the Practicing the Jhānas pilot.
 
 ### --- Features ---

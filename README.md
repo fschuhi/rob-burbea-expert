@@ -60,9 +60,19 @@ graph LR
 - **`apps/answer_generator.py`** - Chat interface with streaming, citations, telemetry
 - **`apps/search_explorer.py`** - Search results inspector with reranking comparison
 
+### Noise Reduction
+
+The `_clean_transcription_noise()` function removes:
+- Timestamps: `[28:02]`, `[1:23:45]`
+- Sound markers: `[laughter]`, `[inaudible]`, `[silence]`, `[bell rings]`
+- Speaker markers: `Rob:`, `Q:`, `A:`
+- Normalizes whitespace
+
+This improves embedding quality and prevents "island chunks" of low-value content.
+
 ### Testing
 
-- **85 tests** covering unit, integration, and end-to-end scenarios
+- **96 tests** covering unit, integration, and end-to-end scenarios
 - Test fixtures in `tests/fixtures/` with sample corpus
 - ChromaDB test database in `tmp/` (gitignored)
 

@@ -9,6 +9,7 @@ from src.data_prep import (
     Document,
     load_markdown_talks,
     split_documents,
+    _clean_transcription_noise,
 )
 from src.env import Env, RAG, Paths
 
@@ -16,6 +17,7 @@ from src.env import Env, RAG, Paths
 # =============================================================================
 # Test Fixtures & Setup
 # =============================================================================
+
 
 @pytest.fixture
 def sample_talk_fixtures(tmp_path: Path):
@@ -62,17 +64,205 @@ def default_env(tmp_path: Path) -> Env:
             chroma_db_dir=tmp_path / "chroma_db",
             metadata_path=tmp_path / "meta.json",
         ),
-        rag=RAG(
-            chunk_size=1000,
-            chunk_overlap=50,
-            use_langchain_splitter=False  # Use fast manual splitter by default
-        )
+        rag=RAG(chunk_size=1000, chunk_overlap=50, use_langchain_splitter=False),  # Use fast manual splitter by default
     )
+
+
+# =============================================================================
+# Unit Tests - Noise Reduction
+# =============================================================================
+
+
+def test_clean_transcription_noise_removes_timestamps():
+    """Test that timestamp markers [HH:MM] are removed."""
+    text = "Some text [28:02] and more text [3:56] here."
+    cleaned = _clean_transcription_noise(text)
+
+    assert "[28:02]" not in cleaned
+    assert "[3:56]" not in cleaned
+    assert "Some text" in cleaned
+    assert "and more text" in cleaned
+    assert "here." in cleaned
+
+
+def test_clean_transcription_noise_removes_sound_markers():
+    """Test that sound markers like [laughter] are removed."""
+    text = "This is funny [laughter] and [inaudible] stuff."
+    cleaned = _clean_transcription_noise(text)
+
+    assert "[laughter]" not in cleaned
+    assert "[inaudible]" not in cleaned
+    assert "This is funny" in cleaned
+    assert "and" in cleaned
+    assert "stuff." in cleaned
+
+
+def test_clean_transcription_noise_removes_speaker_markers():
+    """Test that speaker markers like [yogi inaudible in background] are removed."""
+    text = "Question here [yogi inaudible in background] and answer."
+    cleaned = _clean_transcription_noise(text)
+
+    assert "[yogi inaudible in background]" not in cleaned
+    assert "Question here" in cleaned
+    assert "and answer." in cleaned
+
+
+def test_clean_transcription_noise_normalizes_whitespace():
+    """Test that multiple spaces are collapsed to single space."""
+    text = "Text [28:02]  [laughter]   more text"
+    cleaned = _clean_transcription_noise(text)
+
+    # Should collapse multiple spaces
+    assert "  " not in cleaned
+    assert "Text more text" in cleaned
+
+
+def test_clean_transcription_noise_preserves_paragraph_breaks():
+    """Test that paragraph breaks (\n\n) are preserved."""
+    text = "First paragraph.\n\n[28:02]\n\nSecond paragraph."
+    cleaned = _clean_transcription_noise(text)
+
+    assert "First paragraph.\n\nSecond paragraph." in cleaned
+    assert "[28:02]" not in cleaned
+
+
+def test_clean_transcription_noise_removes_excessive_newlines():
+    """Test that 3+ newlines are normalized to 2."""
+    text = "Paragraph 1\n\n\n\nParagraph 2"
+    cleaned = _clean_transcription_noise(text)
+
+    assert "\n\n\n" not in cleaned
+    assert "Paragraph 1\n\nParagraph 2" in cleaned
+
+
+def test_clean_transcription_noise_case_insensitive():
+    """Test that markers are removed regardless of case."""
+    text = "Text [LAUGHTER] and [Inaudible] stuff."
+    cleaned = _clean_transcription_noise(text)
+
+    assert "[LAUGHTER]" not in cleaned
+    assert "[Inaudible]" not in cleaned
+    assert "Text and stuff." in cleaned
+
+
+def test_clean_transcription_noise_complex_example():
+    """Test cleaning with multiple noise types in realistic text."""
+    text = """
+    Thank you, Sari.
+
+    `[3:56]` So hopefully you could get a sense of, you know, what you've put into the time here.
+
+    [laughter] That's really funny.
+
+    [yogi inaudible in background] Some question here.
+    """
+
+    cleaned = _clean_transcription_noise(text)
+
+    # Noise should be gone
+    assert "[3:56]" not in cleaned
+    assert "[laughter]" not in cleaned
+    assert "[yogi inaudible in background]" not in cleaned
+
+    # Content should remain
+    assert "Thank you, Sari." in cleaned
+    assert "So hopefully you could get a sense" in cleaned
+    assert "That's really funny." in cleaned
+    assert "Some question here." in cleaned
+
+
+def test_clean_transcription_noise_empty_brackets_remain():
+    """Test that empty paragraphs with only noise become empty (not removed here)."""
+    text = "[28:02]"
+    cleaned = _clean_transcription_noise(text)
+
+    # Should be empty or whitespace only
+    assert cleaned.strip() == ""
+
+
+# =============================================================================
+# Integration Tests - Noise Reduction in Chunking
+# =============================================================================
+
+
+def test_split_documents_with_noise_filters_correctly(tmp_path: Path):
+    """Test that noise is filtered during the actual chunking process."""
+    talks_dir = tmp_path / "raw_talks"
+    talks_dir.mkdir()
+
+    noisy_talk = """# Talk with Noise
+
+This is the first paragraph with a timestamp [5:30] in it.
+
+[laughter]
+
+Another paragraph [yogi inaudible] with markers.
+
+`[28:02]` Final paragraph with inline timestamp.
+"""
+
+    talk_path = talks_dir / "noisy-talk.md"
+    talk_path.write_text(noisy_talk, encoding="utf-8")
+
+    rag_config = RAG(chunk_size=1000, chunk_overlap=0, use_langchain_splitter=False)
+    chunks = split_documents(noisy_talk, rag_config, talk_path)
+
+    # Should have 3 paragraphs (header, para1, para2, para3)
+    # The [laughter] paragraph should be empty after cleaning and thus skipped
+    assert len(chunks) == 4
+
+    # Check noise is removed
+    all_text = " ".join(chunk.page_content for chunk in chunks)
+    assert "[5:30]" not in all_text
+    assert "[laughter]" not in all_text
+    assert "[yogi inaudible]" not in all_text
+    assert "[28:02]" not in all_text
+
+    # Check content is preserved
+    assert "This is the first paragraph with a timestamp" in all_text
+    assert "Another paragraph" in all_text
+    assert "Final paragraph with inline timestamp." in all_text
+
+
+def test_split_documents_noise_doesnt_create_island_chunks(tmp_path: Path):
+    """Test that noise-only paragraphs don't create meaningless chunks."""
+    talks_dir = tmp_path / "raw_talks"
+    talks_dir.mkdir()
+
+    noisy_talk = """# Talk
+
+Real content here.
+
+[28:02]
+
+[laughter]
+
+[inaudible]
+
+More real content.
+"""
+
+    talk_path = talks_dir / "island-test.md"
+    talk_path.write_text(noisy_talk, encoding="utf-8")
+
+    rag_config = RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=False)
+    chunks = split_documents(noisy_talk, rag_config, talk_path)
+
+    # Should only have 3 chunks: header, para1, para2
+    # The noise-only paragraphs should be filtered out
+    assert len(chunks) == 3
+
+    # Verify no chunks contain only noise
+    for chunk in chunks:
+        # Each chunk should have substantial content
+        assert len(chunk.page_content.strip()) > 5
+        assert not chunk.page_content.strip().startswith("[")
 
 
 # =============================================================================
 # Unit Tests - Manual Splitter (Default, Fast)
 # =============================================================================
+
 
 def test_load_markdown_talks_success(sample_talk_fixtures: Path):
     """Tests that all markdown files in the directory are loaded."""
@@ -140,7 +330,8 @@ def test_split_documents_enforces_size_limit(sample_talk_fixtures: Path):
 
     # Find the chunks related to the long paragraph (the fifth logical block)
     long_paragraph_chunks = [
-        c for c in chunks
+        c
+        for c in chunks
         if "discussing the three phases" in c.page_content or "preparation, encounter" in c.page_content
     ]
 
@@ -160,9 +351,7 @@ def test_split_documents_metadata_assignment(sample_talk_fixtures: Path):
     talk_b_content = talk_b_path.read_text(encoding="utf-8")
 
     chunks = split_documents(
-        talk_b_content,
-        RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=False),
-        talk_b_path
+        talk_b_content, RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=False), talk_b_path
     )
 
     # Assert 2 chunks (Header and Body) are created by '\n\n' split
@@ -175,6 +364,7 @@ def test_split_documents_metadata_assignment(sample_talk_fixtures: Path):
 # =============================================================================
 # Langchain Splitter Tests (Validates Fallback Works)
 # =============================================================================
+
 
 def test_split_documents_with_langchain_splitter(sample_talk_fixtures: Path):
     """
@@ -207,16 +397,12 @@ def test_both_splitters_produce_similar_results(sample_talk_fixtures: Path):
 
     # Split with manual splitter
     manual_chunks = split_documents(
-        talk_b_content,
-        RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=False),
-        talk_b_path
+        talk_b_content, RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=False), talk_b_path
     )
 
     # Split with langchain splitter
     langchain_chunks = split_documents(
-        talk_b_content,
-        RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=True),
-        talk_b_path
+        talk_b_content, RAG(chunk_size=500, chunk_overlap=0, use_langchain_splitter=True), talk_b_path
     )
 
     # Both should produce 2 chunks
