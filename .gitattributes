@@ -1,5 +1,5 @@
 # Default for all files
-text=auto
+* text=auto
 
 # Force LF (Unix) line endings for common text files
 *.py text eol=lf
